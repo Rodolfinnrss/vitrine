@@ -1,0 +1,4 @@
+#!/bin/sh
+# Inicia a Vitrine
+DIR="$(dirname "$(readlink -f "$0")")"
+exec gjs -m "$DIR/main.js" "$@"

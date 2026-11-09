@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vitrine</title>
+  <script>
+    window.__errs = [];
+    addEventListener('error', e => __errs.push(`${e.message} @ ${(e.filename || '').split('/').pop()}:${e.lineno}`));
+    addEventListener('unhandledrejection', e => __errs.push(`promise: ${e.reason && e.reason.message || e.reason}`));
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="aurora" aria-hidden="true"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <aside class="sidebar">
+    <div class="brand">
+      <img class="brand-logo" src="icon.svg" alt="">
+      <div class="brand-text"><b>Vitrine</b><span>Loja de apps</span></div>
+    </div>
+    <nav id="nav" class="nav"></nav>
+    <div class="side-foot">
+      <div id="fp-status" class="fp-status"><i></i><span>Verificando Flatpak…</span></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div id="scroller" class="scroller">
+      <div id="view" class="view"></div>
+    </div>
+    <header class="topbar">
+      <button id="back" class="icon-btn back-btn" aria-label="Voltar" title="Voltar (Alt+←)">
+        <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+      </button>
+      <label class="search">
+        <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+        <input id="search" type="search" placeholder="Pesquisar apps…" autocomplete="off" spellcheck="false">
+        <button class="search-clear" type="button" aria-label="Limpar"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        <kbd>/</kbd>
+      </label>
+      <div class="top-actions">
+        <button id="btn-activity" class="icon-btn" title="Atividade">
+          <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="3"/><path d="m7 9.5 3 2.5-3 2.5"/><path d="M12.5 15h4.5"/></svg>
+        </button>
+        <button id="btn-settings" class="icon-btn" title="Preferências">
+          <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>
+        </button>
+      </div>
+    </header>
+  </main>
+
+  <div id="dock" class="dock"></div>
+  <div id="toasts" class="toasts"></div>
+  <div id="overlays"></div>
+
+  <script src="js/util.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/views.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
