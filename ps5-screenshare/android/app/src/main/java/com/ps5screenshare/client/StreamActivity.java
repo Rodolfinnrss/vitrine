@@ -46,6 +46,21 @@ public final class StreamActivity extends Activity implements SurfaceHolder.Call
             "SET res=1080p fps=60 bitrate=15000", "SET res=1080p fps=30 bitrate=6000",
             "SET res=1440p fps=60 bitrate=16000", "SET res=2160p fps=60 bitrate=32000"};
 
+    static final String EXTRA_RELAY = "relay";
+    static final String EXTRA_RELAY_HOST = "relayHost";
+    static final String EXTRA_RELAY_PORT = "relayPort";
+    static final String EXTRA_PAIR = "pair";
+
+    /** Through the relay: the console is reached by its pairing code, from any network. */
+    static Intent relayIntent(Context c, String relayHost, int relayPort, String pair, String res, int fps,
+                              int kbps, boolean audio) {
+        return new Intent(c, StreamActivity.class)
+                .putExtra(EXTRA_RELAY, true).putExtra(EXTRA_RELAY_HOST, relayHost)
+                .putExtra(EXTRA_RELAY_PORT, relayPort).putExtra(EXTRA_PAIR, pair)
+                .putExtra(EXTRA_RES, res).putExtra(EXTRA_FPS, fps).putExtra(EXTRA_KBPS, kbps)
+                .putExtra(EXTRA_AUDIO, audio);
+    }
+
     static Intent intent(Context c, String host, int port, String res, int fps, int kbps, boolean audio) {
         return new Intent(c, StreamActivity.class)
                 .putExtra(EXTRA_HOST, host).putExtra(EXTRA_PORT, port).putExtra(EXTRA_RES, res)
@@ -57,6 +72,10 @@ public final class StreamActivity extends Activity implements SurfaceHolder.Call
     private final AtomicInteger rendered = new AtomicInteger();
 
     private String host, res;
+    private boolean relayMode;
+    private String relayHost, relayError;
+    private int relayPort;
+    private byte[] relaySecret;
     private int port, fps, kbps;
     private volatile boolean audioOn;
 
@@ -94,6 +113,17 @@ public final class StreamActivity extends Activity implements SurfaceHolder.Call
         fps = i.getIntExtra(EXTRA_FPS, 60);
         kbps = i.getIntExtra(EXTRA_KBPS, 0);
         audioOn = i.getBooleanExtra(EXTRA_AUDIO, true);
+        relayMode = i.getBooleanExtra(EXTRA_RELAY, false);
+        if (relayMode) {
+            relayHost = i.getStringExtra(EXTRA_RELAY_HOST);
+            relayPort = i.getIntExtra(EXTRA_RELAY_PORT, StreamClient.RELAY_PORT);
+            host = relayHost;
+            try {
+                relaySecret = Secure.pairingSecret(i.getStringExtra(EXTRA_PAIR));
+            } catch (IllegalArgumentException e) {
+                relayError = e.getMessage();
+            }
+        }
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (Build.VERSION.SDK_INT >= 28) {
@@ -203,12 +233,18 @@ public final class StreamActivity extends Activity implements SurfaceHolder.Call
     // ------------------------------------------------------------ network --
 
     private void networkLoop() {
+        if (relayMode && relaySecret == null) {
+            showMessage(relayError != null ? relayError : getString(R.string.enter_ip));
+            return;
+        }
         String hello = StreamClient.hello(audioOn, res, fps, kbps);
         boolean first = true;
         while (running) {
             if (!first) showMessage(getString(R.string.reconnecting, host));
             first = false;
-            try (StreamClient c = new StreamClient(host, port, hello, 5000)) {
+            try (StreamClient c = relayMode
+                    ? StreamClient.viaRelay(relayHost, relayPort, relaySecret, hello, 8000)
+                    : StreamClient.direct(host, port, hello, 5000)) {
                 client = c;
                 padState = -1;
                 ui.post(this::applyPadVisibility);

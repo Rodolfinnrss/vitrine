@@ -14,6 +14,8 @@
   const els = {
     connect: $('connect'), player: $('player'),
     form: $('form'), host: $('host'), port: $('port'), resolution: $('resolution'),
+    lanAddr: $('lan-addr'), relayAddr: $('relay-addr'), portField: $('port-field'),
+    relayHost: $('relayHost'), relayPort: $('relayPort'), pairCode: $('pairCode'),
     fps: $('fps'), kbps: $('kbps'), audio: $('audio'), notice: $('notice'),
     connectBtn: $('connect-btn'), discoverBtn: $('discover-btn'), keysOpen: $('keys-open'),
     found: $('found'), status: $('connect-status'),
@@ -33,6 +35,7 @@
   let audio = null;
   let playing = false;
   let wantConnected = false;
+  let sessionReady = false; // true once the console answered in the current session
   let reconnectTimer = null;
   let pingTimer = null;
   let statsTimer = null;
@@ -54,9 +57,27 @@
     els.notice.hidden = !text;
   }
 
+  function currentMode() {
+    const r = els.form.querySelector('input[name="mode"]:checked');
+    return r && r.value === 'relay' ? 'relay' : 'lan';
+  }
+
+  /** Shows the fields for the chosen way of connecting. */
+  function applyMode(mode) {
+    const relay = mode === 'relay';
+    const radio = els.form.querySelector('input[name="mode"][value="' + mode + '"]');
+    if (radio) radio.checked = true;
+    els.lanAddr.hidden = relay;
+    els.relayAddr.hidden = !relay;
+    els.portField.hidden = relay;
+    els.discoverBtn.hidden = relay;
+    if (relay) showNotice('');
+    else checkAddress();
+  }
+
   function checkAddress() {
     const host = els.host.value.trim();
-    if (host && !P.isPrivateHost(host)) {
+    if (currentMode() === 'lan' && host && !P.isPrivateHost(host)) {
       showNotice('Este endereço não parece ser da sua rede. Para acessar de fora de casa, use uma VPN ' +
         'que leve até a sua rede. O PS5 não tem senha, então não exponha a porta na internet.');
     } else {
@@ -115,8 +136,12 @@
 
   function readForm() {
     return {
+      mode: currentMode(),
       host: els.host.value.trim(),
       port: Number(els.port.value) || 9700,
+      relayHost: els.relayHost.value.trim(),
+      relayPort: Number(els.relayPort.value) || 9800,
+      pairCode: els.pairCode.value.trim(),
       resolution: els.resolution.value,
       fps: Number(els.fps.value),
       kbps: Number(els.kbps.value),
@@ -127,6 +152,10 @@
   function fillForm(s) {
     els.host.value = s.host || '';
     els.port.value = s.port;
+    els.relayHost.value = s.relayHost || '';
+    els.relayPort.value = s.relayPort || 9800;
+    els.pairCode.value = s.pairCode || '';
+    applyMode(s.mode === 'relay' ? 'relay' : 'lan');
     els.resolution.value = s.resolution;
     els.fps.value = String(s.fps);
     els.kbps.value = String(s.kbps);
@@ -166,13 +195,23 @@
 
   async function connect(fromReconnect) {
     const form = readForm();
-    if (!form.host) {
+    if (form.mode === 'relay') {
+      if (!form.relayHost) {
+        setStatus('Informe o endereço do servidor de acesso.');
+        return;
+      }
+      if (!form.pairCode) {
+        setStatus('Informe o código de pareamento (está na página do PS5).');
+        return;
+      }
+    } else if (!form.host) {
       setStatus('Informe o endereço do PS5.');
       return;
     }
     wantConnected = true;
     clearTimeout(reconnectTimer);
     if (!fromReconnect) {
+      sessionReady = false;
       settings = Object.assign({}, settings, form);
       await ps5.saveSettings(settings);
       audio.start(); // inside a user gesture, so Chromium lets the sound play
@@ -214,6 +253,7 @@
 
   function onEvent(ev) {
     if (ev.kind === 'ready') {
+      sessionReady = true;
       setMessage('Conectado. Aguardando o vídeo do PS5…');
       startTimers();
       return;
@@ -227,6 +267,13 @@
       padState = -1;
       video.reset();
       if (!wantConnected) return;
+      if (!sessionReady) {
+        // The first attempt failed (wrong code, console offline, ...): go back to the
+        // connect screen with the reason, instead of retrying forever.
+        wantConnected = false;
+        showConnect(ev.message);
+        return;
+      }
       setMessage('Conexão perdida (' + ev.message + '). Tentando de novo…');
       scheduleReconnect();
     }
@@ -486,6 +533,9 @@
   // ---------------------------------------------------------- startup --
 
   function wire() {
+    els.form.querySelectorAll('input[name="mode"]').forEach((r) => {
+      r.addEventListener('change', () => applyMode(currentMode()));
+    });
     els.host.addEventListener('input', checkAddress);
     els.form.addEventListener('submit', (e) => {
       e.preventDefault();

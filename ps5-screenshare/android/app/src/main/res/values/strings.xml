@@ -30,6 +30,14 @@
     <string name="quality_title">Qualidade da transmissão (vale para todos)</string>
     <string name="applying_quality">Aplicando nova qualidade…</string>
     <string name="close">Sair</string>
+    <string name="mode_title">Como conectar</string>
+    <string name="mode_lan">Rede de casa (mesma rede do PS5)</string>
+    <string name="mode_relay">Pela internet (de outra rede, sem VPN)</string>
+    <string name="relay_title">Acesso pela internet</string>
+    <string name="relay_host_hint">Servidor (ex.: meu-servidor.com)</string>
+    <string name="relay_port_hint">Porta</string>
+    <string name="pair_hint">Código de pareamento</string>
+    <string name="relay_help">O código aparece na página do PS5 (http://IP-do-PS5:9700), quando ele está na sua rede. Digite-o uma vez; ele fica salvo neste aparelho.</string>
     <string name="pad_on">Controle: ligado</string>
     <string name="pad_off">Controle: desligado</string>
     <string name="pad_unavailable">Controle indisponível neste PS5. Abra /log no navegador para ver o motivo.</string>

@@ -14,10 +14,10 @@ SRCDIR    := src
 BUILD     := build
 
 SERVICE_SRCS := main.c avcap.c audio.c fwprofiles.c fwprofiles_data.c stream.c \
-                server.c status.c settings.c config.c control.c platform.c log.c pad.c
+                server.c status.c settings.c config.c control.c platform.c log.c pad.c wire.c secure.c relay.c
 SUPERVISOR_SRCS := supervisor.c control.c config.c settings.c platform.c log.c
 HOST_SRCS := main.c mock_capture.c fwprofiles.c fwprofiles_data.c stream.c \
-             server.c status.c settings.c config.c control.c platform.c log.c pad.c
+             server.c status.c settings.c config.c control.c platform.c log.c pad.c wire.c secure.c relay.c
 HEADERS := $(wildcard $(SRCDIR)/*.h)
 
 SERVICE_ELF    := $(BUILD)/ps5-screenshare-service.elf
@@ -67,6 +67,9 @@ $(BUILD)/host/ps5ss-supervisor: $(BUILD)/host/ps5ss-service $(addprefix $(SRCDIR
 	  -o $@ $(addprefix $(SRCDIR)/,$(SUPERVISOR_SRCS))
 
 test: host
+	cc $(CFLAGS_COMMON) -g -fsanitize=address,undefined -Itests -o $(BUILD)/host/test_secure \
+	  tests/test_secure.c src/secure.c
+	$(BUILD)/host/test_secure
 	cc $(CFLAGS_COMMON) -g -fsanitize=address,undefined -o $(BUILD)/host/test_fwprofiles \
 	  tests/test_fwprofiles.c $(SRCDIR)/fwprofiles.c $(SRCDIR)/fwprofiles_data.c
 	$(BUILD)/host/test_fwprofiles

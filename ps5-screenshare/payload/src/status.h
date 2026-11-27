@@ -16,6 +16,9 @@ typedef struct {
   uint32_t fw;
   char profile[64];        /* firmware profile and request variant */
   unsigned generation;     /* process generation under the supervisor */
+  char relay_host[64];     /* empty when the relay is not configured */
+  int relay_port;
+  char pairing_id[17];     /* public id the relay routes by; never the secret */
 } service_status;
 
 void status_get(service_status *out);
@@ -25,6 +28,7 @@ void status_set_error(int err);
 void status_count_frame(size_t bytes, int keyframe);
 void status_count_audio(void);
 void status_set_platform(uint32_t fw, const char *profile, unsigned generation);
+void status_set_relay(const char *host, int port, const char *pairing_id);
 /* JSON object with status, settings and clients. */
 size_t status_json(char *out, size_t cap, int port);
 

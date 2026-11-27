@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later */
 #include "stream.h"
 
+#include "wire.h"
 #include "log.h"
 #include "protocol.h"
 
@@ -31,7 +32,8 @@ struct packet {
 };
 
 struct client {
-  int in_use, fd;
+  int in_use;
+  wire *lk;
   char peer[64];
   pthread_mutex_t mtx;
   pthread_cond_t cond;
@@ -191,7 +193,7 @@ void bc_status(const char *fmt, ...) {
   bc_publish(packet_new(PKT_STATUS, 0, 0, text, (size_t)n, NULL, 0));
 }
 
-client *bc_add(int fd, const char *peer, int want_audio) {
+client *bc_add(wire *lk, const char *peer, int want_audio) {
   client *c = NULL;
   pthread_mutex_lock(&g_list);
   for (int i = 0; i < STREAM_MAX_CLIENTS; i++) {
@@ -200,7 +202,7 @@ client *bc_add(int fd, const char *peer, int want_audio) {
   if (c) {
     pthread_mutex_lock(&c->mtx);
     c->in_use = 1;
-    c->fd = fd;
+    c->lk = lk;
     snprintf(c->peer, sizeof(c->peer), "%s", peer ? peer : "?");
     c->head = c->count = 0;
     c->bytes = 0;
@@ -217,20 +219,9 @@ client *bc_add(int fd, const char *peer, int want_audio) {
   return c;
 }
 
-static int send_all(int fd, const uint8_t *p, size_t n) {
-  while (n) {
-    ssize_t r = send(fd, p, n, MSG_NOSIGNAL);
-    if (r < 0 && errno == EINTR) continue;
-    if (r <= 0) return -1;
-    p += r;
-    n -= (size_t)r;
-  }
-  return 0;
-}
-
 void bc_client_writer(client *c) {
   uint8_t hello[8] = {'P', 'S', '5', 'S', 0, PS5SS_PROTO_VERSION, 0, 0};
-  if (send_all(c->fd, hello, sizeof(hello))) { bc_client_close(c); return; }
+  if (wire_send(c->lk, hello, sizeof(hello))) { bc_client_close(c); return; }
   for (;;) {
     pthread_mutex_lock(&c->mtx);
     int idle = 0;
@@ -255,9 +246,9 @@ void bc_client_writer(client *c) {
     int r;
     if (idle) {
       uint8_t ka[PS5SS_HEADER_LEN] = {PKT_KEEPALIVE};
-      r = send_all(c->fd, ka, sizeof(ka));
+      r = wire_send(c->lk, ka, sizeof(ka));
     } else {
-      r = send_all(c->fd, p->data, p->len);
+      r = wire_send(c->lk, p->data, p->len);
       if (!r) {
         c->sent_bytes += p->len;
         if (p->type == PKT_VIDEO) c->sent_video++;
@@ -274,7 +265,7 @@ void bc_client_close(client *c) {
   pthread_mutex_lock(&c->mtx);
   if (!c->closed) {
     c->closed = 1;
-    shutdown(c->fd, SHUT_RDWR);
+    shutdown(wire_fd(c->lk), SHUT_RDWR);
   }
   pthread_cond_broadcast(&c->cond);
   pthread_mutex_unlock(&c->mtx);
@@ -295,8 +286,7 @@ void bc_remove(client *c) {
     packet_unref(c->q[(c->head + i) % QUEUE_PACKETS]);
   c->count = 0;
   c->bytes = 0;
-  close(c->fd);
-  c->fd = -1;
+  c->lk = NULL;
   c->in_use = 0;
   pthread_mutex_unlock(&c->mtx);
   pthread_mutex_unlock(&g_list);

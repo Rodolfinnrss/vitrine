@@ -130,3 +130,114 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ----------------------------------------------------------------- relay ---
+# Sealed sessions through the relay (relay/PROTOCOL.md). Independent of the
+# payload and the apps: used by host_test.py to check the wire format.
+
+def pairing_secret(text):
+    """32 hex characters, dashes and spaces ignored."""
+    raw = "".join(ch for ch in text if ch not in "- \t")
+    if len(raw) != 32:
+        raise ValueError("pairing code must have 32 hex characters")
+    return bytes.fromhex(raw)
+
+
+def pairing_id(secret):
+    import hashlib
+    return hashlib.sha256(b"ps5ss-id-v1" + secret).hexdigest()[:16]
+
+
+def pairing_key(secret):
+    import hashlib
+    return hashlib.sha256(b"ps5ss-key-v1" + secret).digest()
+
+
+def session_key(key, salt):
+    import hashlib
+    return hashlib.sha256(b"ps5ss-sess-v1" + key + salt).digest()
+
+
+class RelayClient(Client):
+    """A viewer session through the relay: same packets and commands as Client."""
+
+    def __init__(self, host, port, code, hello="HELLO 1 audio=1", timeout=10, console_id=None):
+        from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+        self._aead = ChaCha20Poly1305
+        self.secret = pairing_secret(code)
+        self.sock = socket.create_connection((host, port), timeout=timeout)
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.sock.sendall(("SUB " + (console_id or pairing_id(self.secret)) + "\n").encode())
+        answer = self._line()
+        if answer != "OK":
+            raise IOError("relay: " + answer)
+        salt_line = self._line()
+        if not salt_line.startswith("SALT "):
+            raise IOError("relay: expected SALT, got %r" % salt_line)
+        salt = bytes.fromhex(salt_line[5:])
+        self._send_key = self._recv_key = session_key(pairing_key(self.secret), salt)
+        self._tx = 0
+        self._rx = 0
+        self._send_dir, self._recv_dir = 0x43, 0x53
+        self._frame(self._send_dir, self._tx, hello.encode() + b"\n")
+        self._tx += 1
+        header = self._open_frame()
+        if header[:4] != b"PS5S":
+            raise IOError("relay: bad stream header")
+        self.version = struct.unpack(">H", header[4:6])[0]
+        self._pending = b""
+
+    def _line(self):
+        buf = b""
+        while not buf.endswith(b"\n"):
+            c = self.sock.recv(1)
+            if not c:
+                raise EOFError("relay closed")
+            buf += c
+        return buf[:-1].decode("ascii", "replace").rstrip("\r")
+
+    def _recvn(self, n):
+        buf = bytearray()
+        while len(buf) < n:
+            chunk = self.sock.recv(n - len(buf))
+            if not chunk:
+                raise EOFError("connection closed")
+            buf += chunk
+        return bytes(buf)
+
+    @staticmethod
+    def _nonce(direction, seq):
+        return bytes([direction, 0, 0, 0]) + seq.to_bytes(8, "big")
+
+    def _frame(self, direction, seq, plain):
+        body = self._aead(self._send_key).encrypt(self._nonce(direction, seq), plain, None)
+        self.sock.sendall(struct.pack(">I", len(body)) + body)
+
+    def _open_frame(self):
+        length = struct.unpack(">I", self._recvn(4))[0]
+        if length < 16 or length > 8 * 1024 * 1024 + 16:
+            raise IOError("relay: bad frame length")
+        body = self._recvn(length)
+        plain = self._aead(self._recv_key).decrypt(self._nonce(self._recv_dir, self._rx), body, None)
+        self._rx += 1
+        return plain
+
+    def packet(self):
+        """Returns (type, flags, pts_us, payload), like Client.packet()."""
+        data = self._open_frame()
+        if len(data) < 16:
+            raise IOError("relay: short packet")
+        ptype, flags, _, length, pts = struct.unpack(">BBHIQ", data[:16])
+        return ptype, flags, pts, data[16:16 + length]
+
+    def send_line(self, line):
+        self._frame(self._send_dir, self._tx, line.encode() + b"\n")
+        self._tx += 1
+
+    def close(self):
+        try:
+            self.send_line("BYE")
+        except OSError:
+            pass
+        self.sock.close()

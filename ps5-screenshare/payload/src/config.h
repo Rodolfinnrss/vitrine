@@ -14,6 +14,8 @@
  *   idle_timeout=15      seconds to keep capturing after the last viewer left
  *   notify=1             console notifications
  *   pad=1                let viewers control the PS5 (virtual controller)
+ *   relay=host:port      connect out to a relay for access from outside the home
+ *                        (port defaults to 9800; see relay/README.md)
  */
 #ifndef PS5SS_CONFIG_H
 #define PS5SS_CONFIG_H
@@ -29,6 +31,9 @@ typedef struct {
   int idle_timeout;
   int notify;
   int pad;
+  char relay_host[64];
+  int relay_port;
+  int relay_set;
 } ps5ss_config;
 
 void config_defaults(ps5ss_config *c);

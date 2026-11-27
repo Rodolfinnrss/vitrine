@@ -43,6 +43,23 @@ public class ActivitySmokeTest {
     }
 
     @Test
+    public void mainActivityRelayModeShowsThePairingFields() {
+        ActivityController<MainActivity> c = Robolectric.buildActivity(MainActivity.class).setup();
+        MainActivity a = c.get();
+        View relayCard = a.findViewById(R.id.relay_card);
+        View discovery = (View) a.findViewById(R.id.found).getParent();
+        assertEquals(View.GONE, relayCard.getVisibility());
+        assertEquals(View.VISIBLE, discovery.getVisibility());
+        ((android.widget.RadioButton) a.findViewById(R.id.mode_relay)).performClick();
+        assertEquals(View.VISIBLE, relayCard.getVisibility());
+        assertEquals(View.GONE, discovery.getVisibility());
+        ((android.widget.RadioButton) a.findViewById(R.id.mode_lan)).performClick();
+        assertEquals(View.GONE, relayCard.getVisibility());
+        assertEquals(View.VISIBLE, discovery.getVisibility());
+        c.pause().stop().destroy();
+    }
+
+    @Test
     public void streamActivityShowsOnScreenController() {
         Context ctx = RuntimeEnvironment.getApplication();
         ActivityController<StreamActivity> c = Robolectric.buildActivity(StreamActivity.class,

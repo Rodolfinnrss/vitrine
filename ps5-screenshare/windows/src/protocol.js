@@ -124,6 +124,20 @@
     }
   }
 
+  /** One packet from a complete buffer (header and payload), or null if malformed. */
+  function parsePacket(buf) {
+    if (!buf || buf.length < PACKET_HEADER_LEN) return null;
+    const v = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    const length = v.getUint32(4);
+    if (buf.length !== PACKET_HEADER_LEN + length) return null;
+    return {
+      type: v.getUint8(0),
+      flags: v.getUint8(1),
+      pts: Number(v.getBigUint64(8)),
+      payload: buf.subarray(PACKET_HEADER_LEN),
+    };
+  }
+
   /** Finds the first SPS and PPS NAL units in an Annex-B access unit. */
   function extractParameterSets(au) {
     let sps = null;
@@ -183,6 +197,7 @@
     PAD,
     MAX_PACKET,
     StreamParser,
+    parsePacket,
     buildHello,
     padLine,
     parseDiscoveryReply,

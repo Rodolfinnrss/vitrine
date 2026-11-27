@@ -119,11 +119,25 @@ pad=1               ; deixar os celulares controlarem o PS5 (0 desliga)
 Os logs ficam em `/data/ps5-screenshare/log.txt` e em
 `http://IP-DO-PS5:9700/log`. O estado em JSON fica em `/status`.
 
+## Acesso de fora de casa (sem VPN e sem abrir porta)
+
+O PS5 e os apps podem se conectar a um **servidor de acesso** (relay) que você mesmo hospeda,
+num VPS ou numa máquina com IP público. Tanto o PS5 quanto o celular e o PC conectam **para fora**,
+então nada precisa ser configurado no roteador. O servidor só repassa bytes: a conexão é
+criptografada de ponta a ponta com o código de pareamento do PS5. Veja [`relay/README.md`](relay/README.md).
+
+Resumo:
+
+1. Hospede o servidor de acesso (`node relay/server.js`, porta 9800).
+2. No `config.ini` do PS5, adicione `relay=seu.servidor.com:9800`.
+3. Na página `http://IP-do-PS5:9700` (na sua rede), copie o código de pareamento.
+4. No app (Windows ou Android), escolha **Pela internet** e informe o servidor e o código.
+
 ## App para Windows
 
 Na pasta [`windows/`](windows/README.md) tem um app para PC: vê a tela e o áudio do PS5 e joga
-com o teclado (as teclas são configuráveis). Para conectar de fora de casa, use uma VPN que
-leve até a sua rede; o PS5 não tem senha, então não abra a porta dele na internet.
+com o teclado (as teclas são configuráveis). Dentro da mesma rede, use **Rede de casa**; de fora,
+use **Pela internet** com o servidor de acesso.
 
 ## Assistir no PC (opcional)
 

@@ -26,6 +26,11 @@ h2 { margin: 0 0 8px; font-size: 20px; }
 input, select { background: #0f1525; color: var(--text); border: 1px solid var(--line); border-radius: 8px;
   padding: 9px 10px; font-size: 15px; font-family: inherit; }
 input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mode { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; }
+.mode legend { color: var(--muted); font-size: 13px; padding: 0 6px; }
+.mode .check { margin: 6px 0; }
+.hint { color: var(--muted); font-size: 12px; line-height: 1.45; margin: -4px 0 12px; }
+[hidden] { display: none !important; }
 .check { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; color: var(--text); }
 .buttons { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
 .spacer { flex: 1; }

@@ -13,6 +13,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "wire.h"
+
 #define STREAM_MAX_CLIENTS 4
 
 typedef struct packet packet;
@@ -25,13 +27,14 @@ void packet_unref(packet *p);
 uint8_t packet_type(const packet *p);
 
 void bc_init(void);
-/* Register a connection; NULL when all slots are taken. */
-client *bc_add(int fd, const char *peer, int want_audio);
+/* Register a viewer connection; NULL when all slots are taken. The link is
+ * used for writes only after this; its socket is closed by the caller. */
+client *bc_add(wire *lk, const char *peer, int want_audio);
 /* Block in the calling thread, sending queued packets until the client is
  * closed or the socket fails. Returns when done (does not free). */
 void bc_client_writer(client *c);
 void bc_client_close(client *c);          /* wake writer, stop sending */
-void bc_remove(client *c);                /* after writer returned */
+void bc_remove(client *c);                /* after writer returned; does not close the socket */
 void bc_client_set_audio(client *c, int want);
 void bc_send_to(client *c, packet *p);    /* caller keeps its reference */
 

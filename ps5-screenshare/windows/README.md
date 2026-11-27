@@ -36,14 +36,23 @@ igual em teclados ABNT2 e US.
 Outras teclas durante a transmissão: **F11** tela cheia. Ao trocar de janela, todas as teclas
 são soltas no console, para nada ficar "preso".
 
-## Conectar de fora de casa (VPN)
+## Conectar de fora de casa
 
-O PS5 não tem senha nem criptografia. Por isso o app **não** deve ser usado com a porta do PS5
-aberta na internet: quem achar o endereço poderia ver a tela e controlar o console. Para acessar
-de fora, o caminho é uma VPN que leve até a sua rede. Assim o PC entra na rede de casa de forma
-criptografada, e o endereço do PS5 é o mesmo de dentro de casa.
+### Pela internet (servidor de acesso)
 
-Duas formas comuns:
+Escolha **Pela internet** na tela de conexão, informe o endereço do servidor de acesso (porta
+9800) e o código de pareamento (está na página `http://IP-do-PS5:9700`, quando você está na
+sua rede). O código fica salvo neste PC; quem tiver o código pode ver e controlar o PS5, então não
+o compartilhe. A conexão é criptografada de ponta a ponta. Veja [`../relay/README.md`](../relay/README.md).
+
+### Por VPN (alternativa)
+
+Não é preciso abrir a porta do PS5 na internet. Uma VPN que leve até a sua rede também funciona:
+o PC entra na rede de casa e o endereço do PS5 é o mesmo de dentro. Use **Rede de casa** com o
+endereço do PS5. Não exponha a porta 9700 do PS5 diretamente na internet: o modo de rede local
+não tem criptografia.
+
+Duas formas comuns de VPN:
 
 - **WireGuard no roteador.** Alguns roteadores (ex.: GL.iNet, UniFi, ASUS) têm servidor WireGuard
   ou OpenVPN na própria configuração. Crie um cliente para o PC e conecte antes de abrir o app.
@@ -51,10 +60,11 @@ Duas formas comuns:
   ou o próprio roteador se ele suportar), com a opção de rota para a sua rede local (subnet router).
   Depois use o endereço do PS5 normalmente.
 
-Com VPN, a imagem depende da internet de casa para enviar o vídeo. Para jogar de fora, comece
-com **720p a 5 Mbps** (já vem selecionado ao escolher 720p).
+Em qualquer dos dois caminhos, a imagem depende da internet de casa (ou do servidor) para chegar
+ao PC. Para jogar de fora, comece com **720p a 5 Mbps** (já vem selecionado ao escolher 720p).
 
-O app mostra um aviso se o endereço digitado não parecer ser da sua rede ou de uma VPN.
+O app mostra um aviso no modo **Rede de casa** se o endereço digitado não parecer ser da sua rede
+ou de uma VPN.
 
 ## Se algo não funcionar
 

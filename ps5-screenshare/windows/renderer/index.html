@@ -15,11 +15,35 @@
       <p class="muted">Veja a tela do PS5 e jogue com o teclado.</p>
 
       <form id="form" autocomplete="off">
-        <label class="field">Endereço do PS5
-          <input id="host" name="host" placeholder="192.168.0.10" spellcheck="false" required>
-        </label>
+        <fieldset class="mode">
+          <legend>Como conectar</legend>
+          <label class="check"><input type="radio" name="mode" value="lan" checked> Rede de casa (mesma rede do PS5)</label>
+          <label class="check"><input type="radio" name="mode" value="relay"> Pela internet (de outra rede, sem VPN)</label>
+        </fieldset>
+
+        <div id="lan-addr">
+          <label class="field">Endereço do PS5
+            <input id="host" name="host" placeholder="192.168.0.10" spellcheck="false">
+          </label>
+        </div>
+
+        <div id="relay-addr" hidden>
+          <label class="field">Servidor de acesso
+            <input id="relayHost" name="relayHost" placeholder="meu-servidor.com" spellcheck="false">
+          </label>
+          <div class="row">
+            <label class="field">Porta do servidor
+              <input id="relayPort" name="relayPort" type="number" min="1" max="65535" value="9800">
+            </label>
+            <label class="field">Código de pareamento
+              <input id="pairCode" name="pairCode" placeholder="0011-2233-4455-..." spellcheck="false" autocomplete="off">
+            </label>
+          </div>
+          <p class="hint">O código aparece na página do PS5 (http://IP-do-PS5:9700), quando ele está na sua rede.</p>
+        </div>
+
         <div class="row">
-          <label class="field">Porta
+          <label class="field" id="port-field">Porta
             <input id="port" name="port" type="number" min="1" max="65535" value="9700">
           </label>
           <label class="field">Resolução

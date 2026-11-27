@@ -14,6 +14,7 @@ const Settings = require('./src/settings');
 const Protocol = require('./src/protocol');
 const { Ps5Connection } = require('./src/stream');
 const { discover } = require('./src/discovery');
+const Secure = require('./src/secure');
 
 // Commands the page may send. Anything else is dropped here.
 const ALLOWED_LINE = /^(PAD \d{1,10},\d{1,10},\d{1,3},\d{1,3},\d{1,3},\d{1,3},\d{1,3},\d{1,3}|PADRELEASE|PADSTATE|KEY|PING \d{1,16}|AUDIO [01]|SET [a-z0-9= ]{1,120})$/;
@@ -71,10 +72,23 @@ ipcMain.handle('discover', () => discover());
 
 ipcMain.handle('stream:connect', (_e, opts) => {
   const s = Settings.normalize(opts);
-  if (!s.host) return { ok: false, error: 'Informe o endereço do PS5' };
-  dropConnection();
   const hello = Protocol.buildHello({ audio: s.audio, resolution: s.resolution, fps: s.fps, kbps: s.kbps });
-  const c = new Ps5Connection({ host: s.host, port: s.port, hello }).connect();
+  let target;
+  if (s.mode === 'relay') {
+    if (!s.relayHost) return { ok: false, error: 'Informe o endereço do servidor de acesso' };
+    let secret;
+    try {
+      secret = Secure.pairingSecret(s.pairCode);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+    target = { host: s.relayHost, port: s.relayPort, relaySecret: secret };
+  } else {
+    if (!s.host) return { ok: false, error: 'Informe o endereço do PS5' };
+    target = { host: s.host, port: s.port };
+  }
+  dropConnection();
+  const c = new Ps5Connection(Object.assign({ hello }, target)).connect();
   conn = c;
   c.on('ready', () => toPage('stream:event', { kind: 'ready' }));
   c.on('packet', (p) => toPage('stream:packet', p.type, p.flags, p.pts, p.payload));

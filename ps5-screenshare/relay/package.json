@@ -1,0 +1,14 @@
+{
+  "name": "ps5-screenshare-relay",
+  "version": "1.0.0",
+  "description": "Servidor de encontro para o PS5 Screen Share: encaminha conexoes criptografadas entre o PS5 e os apps.",
+  "license": "GPL-3.0-or-later",
+  "private": true,
+  "main": "server.js",
+  "bin": { "ps5ss-relay": "server.js" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": { "node": ">=18" }
+}

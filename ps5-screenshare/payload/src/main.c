@@ -11,6 +11,8 @@
 #include "log.h"
 #include "pad.h"
 #include "platform.h"
+#include "relay.h"
+#include "secure.h"
 #include "protocol.h"
 #include "server.h"
 #include "settings.h"
@@ -275,6 +277,19 @@ int main(int argc, char **argv) {
   for (int i = 1; i < argc; i++)
     if (argv[i] && config_apply(&g_cfg, argv[i])) LOG("main: ignoring argument '%s'", argv[i]);
   settings_init(&g_cfg.settings);
+
+  uint8_t secret[PAIR_SECRET_LEN];
+  char pair_text[PAIR_TEXT_LEN], pair_id_text[PAIR_ID_LEN + 1];
+  int pair_created = 0;
+  if (pairing_load(PS5SS_DATA_DIR "/pairing.txt", secret, &pair_created)) {
+    LOG("pairing: cannot read or create " PS5SS_DATA_DIR "/pairing.txt");
+  }
+  if (pair_created) LOG("pairing: new pairing code created");
+  pair_format(secret, pair_text);
+  pair_id(secret, pair_id_text);
+  server_set_pairing(pair_text);
+  status_set_relay(g_cfg.relay_set ? g_cfg.relay_host : "", g_cfg.relay_port, pair_id_text);
+
   pad_init(g_cfg.pad); /* viewers' touch controls; failure only disables them */
   platform_notify_enable(g_cfg.notify);
 
@@ -316,6 +331,14 @@ int main(int argc, char **argv) {
   }
   server_start(lfd, g_cfg.port);
   discovery_start(g_cfg.port);
+  if (g_cfg.relay_set) {
+    if (relay_start(g_cfg.relay_host, g_cfg.relay_port, secret, server_serve_relay)) {
+      LOG("relay: cannot start for %s:%d", g_cfg.relay_host, g_cfg.relay_port);
+    } else {
+      LOG("relay: will connect to %s:%d", g_cfg.relay_host, g_cfg.relay_port);
+    }
+  }
+  memset(secret, 0, sizeof(secret));
 
   char ip[64] = "?";
   platform_local_ip(ip, sizeof(ip));

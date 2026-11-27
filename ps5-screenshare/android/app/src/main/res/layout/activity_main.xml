@@ -26,7 +26,41 @@
             android:textColor="@color/text_dim"
             android:textSize="15sp" />
 
-        <LinearLayout style="@style/Card">
+                <LinearLayout style="@style/Card">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/mode_title"
+                android:textColor="@color/text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <RadioGroup
+                android:id="@+id/mode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/mode_lan"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="@string/mode_lan"
+                    android:textColor="@color/text" />
+
+                <RadioButton
+                    android:id="@+id/mode_relay"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/mode_relay"
+                    android:textColor="@color/text" />
+            </RadioGroup>
+        </LinearLayout>
+
+<LinearLayout style="@style/Card">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -76,7 +110,84 @@
                 android:textAllCaps="false" />
         </LinearLayout>
 
-        <LinearLayout style="@style/Card">
+                <LinearLayout
+            android:id="@+id/relay_card"
+            style="@style/Card"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/relay_title"
+                android:textColor="@color/text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/relay_host"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:autofillHints=""
+                android:hint="@string/relay_host_hint"
+                android:inputType="textUri"
+                android:maxLines="1"
+                android:textColor="@color/text"
+                android:textColorHint="@color/text_dim" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/relay_port"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:autofillHints=""
+                    android:hint="@string/relay_port_hint"
+                    android:inputType="number"
+                    android:maxLines="1"
+                    android:textColor="@color/text"
+                    android:textColorHint="@color/text_dim" />
+
+                <EditText
+                    android:id="@+id/pair"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="2"
+                    android:autofillHints=""
+                    android:hint="@string/pair_hint"
+                    android:inputType="text|textNoSuggestions"
+                    android:maxLines="1"
+                    android:textColor="@color/text"
+                    android:textColorHint="@color/text_dim" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:lineSpacingExtra="3dp"
+                android:text="@string/relay_help"
+                android:textColor="@color/text_dim" />
+
+            <Button
+                android:id="@+id/btn_connect_relay"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="12dp"
+                android:backgroundTint="@color/accent"
+                android:text="@string/connect"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="17sp" />
+        </LinearLayout>
+
+<LinearLayout style="@style/Card">
 
             <TextView
                 android:layout_width="wrap_content"

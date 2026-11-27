@@ -75,7 +75,7 @@ public class StreamClientTest {
             });
             server.start();
             Recorder rec = new Recorder();
-            StreamClient c = new StreamClient("127.0.0.1", ss.getLocalPort(),
+            StreamClient c = StreamClient.direct("127.0.0.1", ss.getLocalPort(),
                     StreamClient.hello(false, "1080p", 60, 8000), 2000);
             try {
                 c.run(rec);
@@ -104,7 +104,7 @@ public class StreamClientTest {
                 } catch (IOException ignored) {
                 }
             }).start();
-            new StreamClient("127.0.0.1", ss.getLocalPort(), "HELLO 1", 2000).close();
+            StreamClient.direct("127.0.0.1", ss.getLocalPort(), "HELLO 1", 2000).close();
         }
     }
 
@@ -115,7 +115,7 @@ public class StreamClientTest {
         assumeFalse("set PS5SS_TEST_HOST to run", host.isEmpty());
         int port = Integer.parseInt(System.getProperty("ps5ss.port", "9700"));
         Recorder rec = new Recorder();
-        StreamClient c = new StreamClient(host, port, StreamClient.hello(true, "720p", 60, 0), 3000);
+        StreamClient c = StreamClient.direct(host, port, StreamClient.hello(true, "720p", 60, 0), 3000);
         Thread killer = new Thread(() -> {
             try {
                 Thread.sleep(1000);

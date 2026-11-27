@@ -38,6 +38,9 @@ public final class MainActivity extends Activity {
     private ProgressBar searching;
     private Button searchButton;
     private volatile boolean discovering;
+    private android.widget.RadioGroup modeGroup;
+    private View relayCard;
+    private EditText relayHost, relayPort, pairField;
 
     @Override
     protected void onCreate(Bundle saved) {
@@ -66,7 +69,21 @@ public final class MainActivity extends Activity {
         rateSpinner.setSelection(clamp(p.getInt(Prefs.RATE, 0), RATE_VALUES.length));
         audioBox.setChecked(p.getBoolean(Prefs.AUDIO, true));
 
+        modeGroup = findViewById(R.id.mode);
+        relayCard = findViewById(R.id.relay_card);
+        relayHost = findViewById(R.id.relay_host);
+        relayPort = findViewById(R.id.relay_port);
+        pairField = findViewById(R.id.pair);
+        relayHost.setText(p.getString(Prefs.RELAY_HOST, ""));
+        relayPort.setText(String.valueOf(p.getInt(Prefs.RELAY_PORT, StreamClient.RELAY_PORT)));
+        pairField.setText(p.getString(Prefs.PAIR, ""));
+        boolean relay = p.getBoolean(Prefs.MODE_RELAY, false);
+        ((android.widget.RadioButton) findViewById(relay ? R.id.mode_relay : R.id.mode_lan)).setChecked(true);
+        applyMode(relay);
+        modeGroup.setOnCheckedChangeListener((g, id) -> applyMode(id == R.id.mode_relay));
+
         findViewById(R.id.btn_connect).setOnClickListener(v -> connect(hostField.getText().toString().trim()));
+        findViewById(R.id.btn_connect_relay).setOnClickListener(v -> connectRelay());
         searchButton.setOnClickListener(v -> discover());
     }
 
@@ -74,6 +91,48 @@ public final class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         discover();
+    }
+
+    /** LAN shows discovery and the address; relay shows the server and the pairing code. */
+    private void applyMode(boolean relay) {
+        relayCard.setVisibility(relay ? View.VISIBLE : View.GONE);
+        ((View) found.getParent()).setVisibility(relay ? View.GONE : View.VISIBLE);
+        ((View) hostField.getParent()).setVisibility(relay ? View.GONE : View.VISIBLE);
+    }
+
+    private void connectRelay() {
+        String server = relayHost.getText().toString().trim();
+        String code = pairField.getText().toString().trim();
+        if (TextUtils.isEmpty(server) || !HOST_PATTERN.matcher(server).matches()) {
+            Toast.makeText(this, R.string.enter_ip, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            Secure.pairingSecret(code);
+        } catch (IllegalArgumentException e) {
+            Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show();
+            return;
+        }
+        int port = 9800;
+        try {
+            int p = Integer.parseInt(relayPort.getText().toString().trim());
+            if (p > 0 && p < 65536) port = p;
+        } catch (NumberFormatException ignored) {
+        }
+        int resIdx = resSpinner.getSelectedItemPosition();
+        int fpsIdx = fpsSpinner.getSelectedItemPosition();
+        int rateIdx = rateSpinner.getSelectedItemPosition();
+        boolean audio = audioBox.isChecked();
+        Prefs.get(this).edit()
+                .putBoolean(Prefs.MODE_RELAY, true)
+                .putString(Prefs.RELAY_HOST, server).putInt(Prefs.RELAY_PORT, port)
+                .putString(Prefs.PAIR, code)
+                .putInt(Prefs.RES, resIdx).putInt(Prefs.FPS, fpsIdx).putInt(Prefs.RATE, rateIdx)
+                .putBoolean(Prefs.AUDIO, audio).apply();
+        String res = RES_VALUES[clamp(resIdx, RES_VALUES.length)];
+        int fps = FPS_VALUES[clamp(fpsIdx, FPS_VALUES.length)];
+        int kbps = RATE_VALUES[clamp(rateIdx, RATE_VALUES.length)];
+        startActivity(StreamActivity.relayIntent(this, server, port, code, res, fps, kbps, audio));
     }
 
     private ArrayAdapter<CharSequence> adapter(int array) {
@@ -139,6 +198,7 @@ public final class MainActivity extends Activity {
         int rateIdx = rateSpinner.getSelectedItemPosition();
         boolean audio = audioBox.isChecked();
         Prefs.get(this).edit()
+                .putBoolean(Prefs.MODE_RELAY, false)
                 .putString(Prefs.HOST, host).putInt(Prefs.PORT, port)
                 .putInt(Prefs.RES, resIdx).putInt(Prefs.FPS, fpsIdx).putInt(Prefs.RATE, rateIdx)
                 .putBoolean(Prefs.AUDIO, audio).apply();

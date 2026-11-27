@@ -419,6 +419,97 @@ def test_pad_control():
         s.stop()
 
 
+RELAY_PORT = 19950
+
+
+def test_relay_sealed():
+    print("relay: console dials out, sealed viewer sessions, wrong code refused")
+    relay_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "relay"))
+    relay_log = open(os.path.join(WORK, "relay.log"), "w")
+    relay = subprocess.Popen(["node", os.path.join(relay_dir, "server.js"), str(RELAY_PORT)],
+                             stdout=relay_log, stderr=subprocess.STDOUT)
+    s = None
+    try:
+        for _ in range(100):
+            try:
+                socket.create_connection(("127.0.0.1", RELAY_PORT), timeout=0.2).close()
+                break
+            except OSError:
+                time.sleep(0.05)
+        s = Service(args=("relay=127.0.0.1:%d" % RELAY_PORT,))
+        code_file = os.path.join(os.path.dirname(BIN), "data", "pairing.txt")
+        check(os.path.exists(code_file), "the console creates its pairing code")
+        code = open(code_file).read().strip()
+        check(len(code.replace("-", "")) == 32, "pairing code has 128 bits (%s)" % code)
+        secret = ps.pairing_secret(code)
+        my_id = ps.pairing_id(secret)
+
+        connected = False
+        for _ in range(100):
+            st = json.loads(http("/status")[2])
+            if st["relay"]["connected"] == 1:
+                connected = True
+                break
+            time.sleep(0.1)
+        check(connected, "console registers with the relay")
+        check(st["relay"]["pairing_id"] == my_id, "console reports the same pairing id as the derivation")
+        check(st["relay"]["configured"] == 1 and st["relay"]["port"] == RELAY_PORT, "relay settings in /status")
+        check(code not in json.dumps(st), "the pairing secret itself never appears in /status")
+
+        v = ps.RelayClient("127.0.0.1", RELAY_PORT, code, "HELLO 1 audio=0 res=720p fps=60")
+        check(getattr(v, "version", 0) == 1, "sealed stream header decrypts (proves the console knows the code)")
+        stats = collect_relay(v, 3.0)
+        check(stats["info"] and stats["info"][0]["width"] == 1280, "INFO arrives through the relay")
+        check(stats["video"] >= 90, "video arrives through the relay (%d frames in 3 s)" % stats["video"])
+        check(stats["first_video_key"] is True, "first video packet through the relay is an IDR")
+        v.send_line("PAD 1,16384,128,128,128,128,0,0")
+        time.sleep(0.3)
+        check(json.loads(http("/status")[2])["pad"]["owned"] == 1, "a command sent through the tunnel reaches the console")
+        v.send_line("PADRELEASE")
+        v.close()
+
+        # Right console id, wrong key: the relay routes it, the console cannot open the
+        # client's HELLO and closes without sending anything. The client sees only the end.
+        try:
+            ps.RelayClient("127.0.0.1", RELAY_PORT, "00" * 16, console_id=my_id)
+            check(False, "a wrong pairing code must not open a session")
+        except EOFError:
+            check(True, "a wrong pairing code gets no stream: the console closes first")
+        except Exception as err:
+            check(False, "unexpected error for a wrong pairing code: %s" % type(err).__name__)
+
+        try:
+            ps.RelayClient("127.0.0.1", RELAY_PORT, code, console_id="0" * 16)
+            check(False, "an unknown console id must not connect")
+        except IOError as err:
+            check("NOCONSOLE" in str(err), "an unknown console id is answered NOCONSOLE")
+    finally:
+        if s is not None:
+            s.stop()
+        relay.terminate()
+        try:
+            relay.wait(5)
+        except subprocess.TimeoutExpired:
+            relay.kill()
+        relay_log.close()
+
+
+def collect_relay(client, seconds):
+    stats = {"video": 0, "audio": 0, "info": [], "first_video_key": None}
+    end = time.time() + seconds
+    while time.time() < end:
+        t, flags, pts, data = client.packet()
+        if t == ps.PKT_VIDEO:
+            if stats["first_video_key"] is None:
+                stats["first_video_key"] = bool(flags & 1)
+            stats["video"] += 1
+        elif t == ps.PKT_AUDIO:
+            stats["audio"] += 1
+        elif t == ps.PKT_INFO:
+            stats["info"].append(json.loads(data))
+    return stats
+
+
 def main():
     make_clip()
     try:
@@ -428,6 +519,7 @@ def main():
         test_recovery_and_variant_rotation()
         test_supervised_restart_and_quit()
         test_pad_control()
+        test_relay_sealed()
     finally:
         if not FAILS:
             shutil.rmtree(WORK, ignore_errors=True)

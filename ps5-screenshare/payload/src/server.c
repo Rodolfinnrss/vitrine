@@ -8,7 +8,9 @@
 #include "platform.h"
 #include "protocol.h"
 #include "settings.h"
+#include "wire.h"
 #include "status.h"
+#include "relay.h"
 #include "stream.h"
 
 #include <arpa/inet.h>
@@ -108,6 +110,12 @@ static void http_reply(int fd, const char *status, const char *type,
   if (write_all(fd, hdr, (size_t)n) == 0 && !head && len) write_all(fd, body, len);
 }
 
+static char g_pairing[40];
+
+void server_set_pairing(const char *text) {
+  snprintf(g_pairing, sizeof(g_pairing), "%s", text ? text : "");
+}
+
 static void http_index(int fd, int head) {
   service_status st;
   status_get(&st);
@@ -115,7 +123,17 @@ static void http_index(int fd, int head) {
   settings_get(&cs);
   char ip[64] = "?";
   platform_local_ip(ip, sizeof(ip));
-  char page[4096];
+  char page[6144];
+  char pairing[512];
+  snprintf(pairing, sizeof(pairing),
+      "<h2>Acesso de fora de casa</h2>"
+      "<p>Código de pareamento: <code>%s</code><br>"
+      "Servidor: <code>%s</code> &middot; PS5 %s</p>"
+      "<p style='color:#9aa4b8;font-size:14px'>Guarde este código. Quem tiver o código pode "
+      "assistir e controlar o PS5 pela internet.</p>",
+      g_pairing, st.relay_host[0] ? st.relay_host : "(não configurado)",
+      st.relay_host[0] ? (relay_connected() ? "conectado ao servidor" : "aguardando o servidor")
+                       : "use relay= em config.ini");
   int has_apk = 0;
 #ifdef PS5SS_APK_PATH
   has_apk = 1;
@@ -131,6 +149,7 @@ static void http_index(int fd, int head) {
       "<h1>PS5 Screen Share</h1>"
       "<p>Endere&ccedil;o para o app: <code>%s:%d</code></p>"
       "%s"
+      "%s"
       "<table><tr><td>Estado</td><td>%s</td></tr>"
       "<tr><td>Captura</td><td>%dx%d @ %d fps, %d kbps</td></tr>"
       "<tr><td>Pedido</td><td>%s @ %d fps, %d kbps</td></tr>"
@@ -140,6 +159,7 @@ static void http_index(int fd, int head) {
       "</body></html>",
       ip, g_port,
       has_apk ? "<a class=btn href=/app.apk>Baixar o app Android (APK)</a>" : "",
+      pairing,
       st.state, st.width, st.height, st.fps, st.kbps,
       settings_resolution_name(cs.height), cs.fps, cs.kbps,
       (st.fw >> 24) & 0xff, (st.fw >> 16) & 0xff, st.profile,
@@ -198,16 +218,16 @@ static int parse_audio_flag(const char *line, int def) {
   return a[6] != '0';
 }
 
-static void send_full_and_close(int fd) {
+static void send_full_and_close(wire *w) {
   uint8_t hello[8] = {'P', 'S', '5', 'S', 0, PS5SS_PROTO_VERSION, 0, 0};
-  write_all(fd, hello, sizeof(hello));
+  wire_send(w, hello, sizeof(hello));
   const char *msg = "Servidor cheio: muitos clientes conectados";
   size_t len = strlen(msg);
-  uint8_t h[PS5SS_HEADER_LEN] = {PKT_STATUS, 0, 0, 0,
-                                 (uint8_t)(len >> 24), (uint8_t)(len >> 16),
-                                 (uint8_t)(len >> 8), (uint8_t)len};
-  write_all(fd, h, sizeof(h));
-  write_all(fd, msg, len);
+  uint8_t out[PS5SS_HEADER_LEN + 64] = {PKT_STATUS, 0, 0, 0,
+                                        (uint8_t)(len >> 24), (uint8_t)(len >> 16),
+                                        (uint8_t)(len >> 8), (uint8_t)len};
+  memcpy(out + PS5SS_HEADER_LEN, msg, len);
+  wire_send(w, out, PS5SS_HEADER_LEN + len);
 }
 
 typedef struct {
@@ -219,16 +239,18 @@ static void *writer_main(void *arg) {
   return NULL;
 }
 
-static void handle_stream(int fd, const struct sockaddr_in *peer_addr) {
-  char peer[64];
-  char ipbuf[INET_ADDRSTRLEN] = "?";
-  inet_ntop(AF_INET, &peer_addr->sin_addr, ipbuf, sizeof(ipbuf));
-  snprintf(peer, sizeof(peer), "%s:%u", ipbuf, ntohs(peer_addr->sin_port));
+/* One viewer session. The caller owns the socket and closes it afterwards.
+ * peer_addr is NULL for viewers that arrive through the relay: those are
+ * always sealed, and they are not on the LAN, so LAN-only commands are refused. */
+static void handle_stream(wire *w, const char *peer, const struct sockaddr_in *peer_addr) {
+  char ipbuf[INET_ADDRSTRLEN] = "pela internet";
+  if (peer_addr) inet_ntop(AF_INET, &peer_addr->sin_addr, ipbuf, sizeof(ipbuf));
+  int fd = wire_fd(w);
 
   char line[256];
-  if (read_line(fd, line, sizeof(line)) < 0) return;
+  if (wire_read_line(w, line, sizeof(line)) < 0) return;
   if (!strcmp(line, "QUIT")) {
-    if (is_loopback(peer_addr)) {
+    if (peer_addr && is_loopback(peer_addr)) {
       LOG("server: QUIT from %s (a new copy is starting)", peer);
       atomic_store(&g_quit, 1);
       write_all(fd, "BYE\n", 4);
@@ -251,11 +273,10 @@ static void handle_stream(int fd, const struct sockaddr_in *peer_addr) {
   set_timeout(fd, SO_RCVTIMEO, 0);
   set_timeout(fd, SO_SNDTIMEO, 10);
 
-  client *c = bc_add(fd, peer, want_audio);
+  client *c = bc_add(w, peer, want_audio);
   if (!c) {
     LOG("server: refusing %s, %d clients connected", peer, STREAM_MAX_CLIENTS);
-    send_full_and_close(fd);
-    close(fd);
+    send_full_and_close(w);
     return;
   }
   LOG("server: client %s connected (audio=%d)", peer, want_audio);
@@ -276,7 +297,7 @@ static void handle_stream(int fd, const struct sockaddr_in *peer_addr) {
   }
   int last_pad = -1;
   pad_reply(c, &last_pad, pad_state_for(c));
-  while (read_line(fd, line, sizeof(line)) >= 0) {
+  while (wire_read_line(w, line, sizeof(line)) >= 0) {
     if (!strcmp(line, "KEY")) {
       bc_request_keyframe();
     } else if (!strncmp(line, "AUDIO", 5)) {
@@ -314,6 +335,10 @@ static void handle_stream(int fd, const struct sockaddr_in *peer_addr) {
   LOG("server: client %s disconnected", peer);
 }
 
+void server_serve_relay(wire *w, const char *peer) {
+  handle_stream(w, peer, NULL);
+}
+
 static void *conn_main(void *arg) {
   conn_arg *ca = arg;
   int fd = ca->fd;
@@ -333,9 +358,14 @@ static void *conn_main(void *arg) {
     if (!memcmp(probe, "GET ", 4) || !memcmp(probe, "HEAD", 4)) {
       handle_http(fd);
     } else if (!memcmp(probe, "HELL", 4) || !memcmp(probe, "QUIT", 4)) {
-      handle_stream(fd, &peer);
-      /* handle_stream closes stream clients through bc_remove */
-      return NULL;
+      char ip[INET_ADDRSTRLEN] = "?", text[64];
+      inet_ntop(AF_INET, &peer.sin_addr, ip, sizeof(ip));
+      snprintf(text, sizeof(text), "%s:%u", ip, ntohs(peer.sin_port));
+      wire *w = wire_plain(fd);
+      if (w) {
+        handle_stream(w, text, &peer);
+        wire_free(w);
+      }
     }
   }
   close(fd);

@@ -4,6 +4,7 @@
 #include "status.h"
 
 #include "pad.h"
+#include "relay.h"
 #include "settings.h"
 #include "stream.h"
 
@@ -71,6 +72,14 @@ void status_set_platform(uint32_t fw, const char *profile, unsigned generation) 
   pthread_mutex_unlock(&g_mtx);
 }
 
+void status_set_relay(const char *host, int port, const char *pairing_id) {
+  pthread_mutex_lock(&g_mtx);
+  snprintf(g_st.relay_host, sizeof(g_st.relay_host), "%s", host ? host : "");
+  g_st.relay_port = port;
+  snprintf(g_st.pairing_id, sizeof(g_st.pairing_id), "%s", pairing_id ? pairing_id : "");
+  pthread_mutex_unlock(&g_mtx);
+}
+
 static void json_escape(char *out, size_t cap, const char *in) {
   size_t o = 0;
   for (; *in && o + 7 < cap; in++) {
@@ -92,6 +101,8 @@ size_t status_json(char *out, size_t cap, int port) {
   bc_describe(clients, sizeof(clients));
   pad_info pad;
   pad_get_info(&pad);
+  char relay_host[sizeof(st.relay_host) * 2];
+  json_escape(relay_host, sizeof(relay_host), st.relay_host);
   int n = snprintf(out, cap,
       "{\"app\":\"ps5-screenshare\",\"version\":\"%s\",\"protocol\":1,\"port\":%d,"
       "\"firmware\":\"%x.%02x\",\"firmware_id\":\"0x%08x\",\"profile\":\"%s\","
@@ -100,6 +111,7 @@ size_t status_json(char *out, size_t cap, int port) {
       "\"requested\":{\"resolution\":\"%s\",\"fps\":%d,\"kbps\":%d,\"audio\":%d},"
       "\"frames\":%llu,\"bytes\":%llu,\"keyframes\":%llu,\"audio_blocks\":%llu,"
       "\"pad\":{\"available\":%d,\"owned\":%d,\"writes\":%llu,\"buttons\":\"0x%x\"},"
+      "\"relay\":{\"configured\":%d,\"host\":\"%s\",\"port\":%d,\"connected\":%d,\"pairing_id\":\"%s\"},"
       "\"clients\":%s}",
       PS5SS_VERSION, port, (st.fw >> 24) & 0xff, (st.fw >> 16) & 0xff, st.fw,
       st.profile, st.generation, state, (unsigned)st.last_error, st.width,
@@ -107,7 +119,8 @@ size_t status_json(char *out, size_t cap, int port) {
       cs.fps, cs.kbps, cs.audio, (unsigned long long)st.frames,
       (unsigned long long)st.bytes, (unsigned long long)st.keyframes,
       (unsigned long long)st.audio_blocks, pad.available, pad.owned,
-      (unsigned long long)pad.writes, pad.buttons, clients);
+      (unsigned long long)pad.writes, pad.buttons,
+      st.relay_host[0] != 0, relay_host, st.relay_port, relay_connected(), st.pairing_id, clients);
   if (n < 0) return 0;
   return (size_t)n < cap ? (size_t)n : cap - 1;
 }

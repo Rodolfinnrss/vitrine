@@ -22,6 +22,7 @@ void config_defaults(ps5ss_config *c) {
   c->idle_timeout = 15;
   c->notify = 1;
   c->pad = 1;
+  c->relay_port = 9800;
 }
 
 int config_apply(ps5ss_config *c, const char *token) {
@@ -35,6 +36,23 @@ int config_apply(ps5ss_config *c, const char *token) {
   for (char *e = key + strlen(key); e > key && isspace((unsigned char)e[-1]);) *--e = 0;
   while (*val && isspace((unsigned char)*val)) val++;
   for (char *e = val + strlen(val); e > val && isspace((unsigned char)e[-1]);) *--e = 0;
+  if (!strcasecmp(key, "relay")) {
+    const char *colon = strrchr(val, ':');
+    size_t hl = colon ? (size_t)(colon - val) : strlen(val);
+    if (hl == 0 || hl >= sizeof(c->relay_host)) return -1;
+    int port = 9800;
+    if (colon) {
+      char *end = NULL;
+      long p = strtol(colon + 1, &end, 10);
+      if (colon[1] == 0 || *end || p < 1 || p > 65535) return -1;
+      port = (int)p;
+    }
+    memcpy(c->relay_host, val, hl);
+    c->relay_host[hl] = 0;
+    c->relay_port = port;
+    c->relay_set = 1;
+    return 0;
+  }
   long n = strtol(val, NULL, 0);
   if (!strcasecmp(key, "port")) {
     if (n < 1 || n > 64535) return -1;

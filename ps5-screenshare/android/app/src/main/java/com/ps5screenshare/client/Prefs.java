@@ -15,6 +15,10 @@ final class Prefs {
     static final String AUDIO = "audio";
     static final String FILL = "fill";
     static final String PAD_VISIBLE = "pad_visible";
+    static final String MODE_RELAY = "mode_relay";
+    static final String RELAY_HOST = "relay_host";
+    static final String RELAY_PORT = "relay_port";
+    static final String PAIR = "pair";
 
     private Prefs() {}
 

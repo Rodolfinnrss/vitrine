@@ -10,11 +10,15 @@
     "start": "electron .",
     "test": "node --test \"tests/*.test.js\"",
     "dist": "node scripts/package.js",
-    "test:e2e": "node tests/e2e/app.e2e.js"
+    "test:e2e": "node tests/e2e/app.e2e.js",
+    "test:e2e:relay": "node tests/e2e/relay.e2e.js"
   },
   "devDependencies": {
     "@electron/packager": "20.3.1",
     "electron": "45.5.0",
     "playwright": "^1.63.0"
+  },
+  "dependencies": {
+    "@stablelib/chacha20poly1305": "^2.0.1"
   }
 }
