@@ -9,6 +9,7 @@
 #include "config.h"
 #include "control.h"
 #include "log.h"
+#include "pad.h"
 #include "platform.h"
 #include "protocol.h"
 #include "server.h"
@@ -88,9 +89,8 @@ static void publish_info(const capture_settings *cs, int audio, unsigned generat
       generation, PS5SS_VERSION);
   if (n < 0) return;
   if ((size_t)n >= sizeof(json)) n = sizeof(json) - 1;
-  packet *p = packet_new(PKT_INFO, 0, 0, json, (size_t)n, NULL, 0);
-  bc_set_info(p);
-  packet_unref(p);
+  /* bc_set_info takes ownership of the new packet. */
+  bc_set_info(packet_new(PKT_INFO, 0, 0, json, (size_t)n, NULL, 0));
 }
 
 static req_variant alternate_variant(req_variant v, uint32_t fw) {
@@ -275,6 +275,7 @@ int main(int argc, char **argv) {
   for (int i = 1; i < argc; i++)
     if (argv[i] && config_apply(&g_cfg, argv[i])) LOG("main: ignoring argument '%s'", argv[i]);
   settings_init(&g_cfg.settings);
+  pad_init(g_cfg.pad); /* viewers' touch controls; failure only disables them */
   platform_notify_enable(g_cfg.notify);
 
   unsigned generation = 0;
@@ -322,6 +323,7 @@ int main(int argc, char **argv) {
   if (generation <= 1) NOTIFY("PS5 Screen Share pronto em %s:%d", ip, g_cfg.port);
 
   run_capture(generation);
+  pad_shutdown();
 
   avcap_terminate();
   LOG("main: exiting");

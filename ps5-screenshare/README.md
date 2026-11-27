@@ -41,9 +41,11 @@ Play. O vídeo já sai comprimido do console e o celular decodifica por hardware
 5. Abra o app na mesma rede Wi-Fi. O PS5 aparece sozinho na lista; toque nele.
    Se ele não aparecer, digite o IP.
 
-Durante a transmissão, **toque na tela** para mostrar as estatísticas (fps,
-Mbps, ping) e os botões de **áudio**, **ajustar/esticar** e **qualidade**
-(720p até 4K, de 5 a 32 Mbps).
+Durante a transmissão, os **controles do PS5 aparecem sobre a imagem**, como no
+Remote Play. Toque nos botões para jogar. Toque em outro ponto da tela para
+mostrar ou esconder a barra com **áudio**, **ajustar/esticar**, **qualidade**
+(720p até 4K, de 5 a 32 Mbps) e o botão **Controle** (liga e desliga os
+controles na tela).
 
 Dicas:
 - Use Wi-Fi de **5 GHz**. 1080p60 a 8 Mbps é o padrão. Se travar, troque para
@@ -54,6 +56,32 @@ Dicas:
   payload reinicia a captura sozinho num processo novo (via ELF loader). A
   imagem volta em cerca de 10 segundos e o app reconecta sozinho.
 - A captura só fica ligada enquanto há alguém assistindo (e mais 15 segundos).
+
+## Controle pelo celular
+
+Os botões na tela seguem o layout do DualSense: **direcional** e **quatro
+botões de ação** (△ ○ × □) à direita, **analógicos** embaixo, **L1/L2/R1/R2**
+em cima, e **PS**, **OPTIONS** e **TOUCH** no centro. Ao tocar num botão, ele é
+enviado ao console na hora. Os analógicos funcionam arrastando o dedo.
+
+- **Um celular controla por vez.** O primeiro que toca num botão assume o
+  controle. Os outros veem "Controle em uso por outro celular".
+- **Quem controla precisa continuar tocando ou mantendo o dedo.** Se o celular
+  ficar sem enviar nada por 2 segundos, o controle é liberado, e o console volta
+  ao estado neutro após 250 ms sem entrada.
+- **Desconectar o celular libera o controle na hora.**
+
+O controle usa o mesmo caminho de *controle virtual* do PBS-Payload (GPL-3.0),
+o que mantém o PS5 reconhecendo o pad como um controle real.
+
+> **Atenção:** o servidor não tem senha. Quem estiver na mesma rede Wi-Fi pode
+> enviar comandos ao PS5, então use em rede de confiança. Para desligar o
+> controle e deixar só a transmissão, use `pad=0` em `config.ini`.
+
+**Não verificado num console:** a entrada do controle virtual, e os bits de
+OPTIONS, PS e TOUCH (copiados da tabela do PBS-Payload). Se algum botão fizer
+outra coisa, me diga qual e veja `http://IP-DO-PS5:9700/log` (linhas que
+começam com `pad:`).
 
 ## Firmware
 
@@ -85,6 +113,7 @@ resource_1080=0xb4  ; IDs do ResourceArbitrator (avançado)
 resource_4k=0xb6
 idle_timeout=15     ; segundos capturando depois que o último celular sai
 notify=1            ; notificações no PS5
+pad=1               ; deixar os celulares controlarem o PS5 (0 desliga)
 ```
 
 Os logs ficam em `/data/ps5-screenshare/log.txt` e em
@@ -144,6 +173,10 @@ versão assinada com outra chave, desinstale a anterior antes.
 
 Feitos no Linux (sem PS5):
 
+- `make -C payload test` também cobre o controle: validação do formato da linha
+  `PAD`, dono único, release por desconexão, por `PADRELEASE` e por 2 s de
+  silêncio, linhas malformadas ignoradas, e `pad=0` / `PS5SS_MOCK_PAD=0`.
+
 - `make -C payload test`: compila o serviço para Linux com AddressSanitizer e
   UBSan e uma captura simulada (reproduz um arquivo H.264 e gera um tom de
   440 Hz). Testa HTTP, descoberta UDP, streaming (o vídeo recebido é
@@ -158,8 +191,10 @@ Feitos no Linux (sem PS5):
   a tela de transmissão (Robolectric) contra o servidor real: conecta, recebe e
   decodifica (~60 fps) e mostra as estatísticas.
 
-O que **não** foi testado: a abertura real da captura num PS5, a decodificação
-num celular físico e a latência ponta a ponta.
+O que **não** foi testado: a abertura real da captura num PS5, a entrada do
+controle virtual num console, a decodificação num celular físico e a latência
+ponta a ponta. Os testes de controle no Android (layout e toque) rodam no JVM,
+sem tela.
 
 ## Créditos
 

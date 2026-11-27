@@ -14,6 +14,7 @@ final class Prefs {
     static final String RATE = "rate_index";
     static final String AUDIO = "audio";
     static final String FILL = "fill";
+    static final String PAD_VISIBLE = "pad_visible";
 
     private Prefs() {}
 

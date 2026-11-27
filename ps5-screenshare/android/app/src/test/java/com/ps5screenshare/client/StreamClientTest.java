@@ -22,6 +22,7 @@ public class StreamClientTest {
     static final class Recorder implements StreamClient.Listener {
         final List<String> events = new ArrayList<>();
         int video, keyframes, audio;
+        int pad = -1;
         long lastPts = -1;
         boolean ptsIncreasing = true;
 
@@ -35,6 +36,7 @@ public class StreamClientTest {
         @Override public void onAudio(byte[] d, long pts) { audio++; events.add("audio:" + d.length); }
         @Override public void onStatus(String t) { events.add("status:" + t); }
         @Override public void onPong(String t) { events.add("pong:" + t); }
+        @Override public void onPad(int state) { pad = state; }
     }
 
     private static void packet(DataOutputStream o, int type, int flags, long pts, byte[] p) throws IOException {
@@ -65,6 +67,7 @@ public class StreamClientTest {
                     packet(o, StreamClient.PKT_STATUS, 0, 0, "Transmitindo".getBytes(StandardCharsets.UTF_8));
                     packet(o, 99, 0, 0, new byte[3]); // unknown types are skipped
                     packet(o, StreamClient.PKT_PONG, 0, 0, "42".getBytes(StandardCharsets.UTF_8));
+                    packet(o, StreamClient.PKT_PAD, 0, 0, new byte[] {2});
                     s.getOutputStream().write(bytes.toByteArray());
                     s.getOutputStream().flush();
                 } catch (IOException ignored) {
@@ -88,6 +91,7 @@ public class StreamClientTest {
             assertTrue(rec.events.contains("info:{\"width\":1920}"));
             assertTrue(rec.events.contains("status:Transmitindo"));
             assertTrue(rec.events.contains("pong:42"));
+            assertEquals(StreamClient.PAD_YOURS, rec.pad);
         }
     }
 

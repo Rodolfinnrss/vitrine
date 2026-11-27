@@ -4,6 +4,7 @@
 #include "server.h"
 
 #include "log.h"
+#include "pad.h"
 #include "platform.h"
 #include "protocol.h"
 #include "settings.h"
@@ -79,6 +80,16 @@ static int read_line(int fd, char *out, size_t cap) {
   }
   out[len] = 0;
   return (int)len;
+}
+
+/* Sends PKT_PAD to one viewer when its availability changed. */
+static void pad_reply(client *c, int *last, int state) {
+  if (state == *last) return;
+  *last = state;
+  uint8_t b = (uint8_t)state;
+  packet *p = packet_new(PKT_PAD, 0, 0, &b, 1, NULL, 0);
+  bc_send_to(c, p);
+  packet_unref(p);
 }
 
 static int is_loopback(const struct sockaddr_in *a) {
@@ -259,8 +270,12 @@ static void handle_stream(int fd, const struct sockaddr_in *peer_addr) {
   }
   if (changed < 0) {
     static const char bad[] = "Configuracao invalida ignorada";
-    bc_send_to(c, packet_new(PKT_STATUS, 0, 0, bad, sizeof(bad) - 1, NULL, 0));
+    packet *p = packet_new(PKT_STATUS, 0, 0, bad, sizeof(bad) - 1, NULL, 0);
+    bc_send_to(c, p);
+    packet_unref(p);
   }
+  int last_pad = -1;
+  pad_reply(c, &last_pad, pad_state_for(c));
   while (read_line(fd, line, sizeof(line)) >= 0) {
     if (!strcmp(line, "KEY")) {
       bc_request_keyframe();
@@ -274,10 +289,25 @@ static void handle_stream(int fd, const struct sockaddr_in *peer_addr) {
     } else if (!strncmp(line, "SET", 3)) {
       int r = settings_apply_tokens(line + 3);
       LOG("server: %s SET %s -> %d", peer, line + 3, r);
+    } else if (!strncmp(line, "PAD ", 4)) {
+      uint32_t seq;
+      pad_state state;
+      if (pad_parse(line + 4, &seq, &state)) {
+        LOG("server: %s sent a malformed PAD line", peer);
+      } else {
+        pad_reply(c, &last_pad, pad_submit(c, seq, &state));
+      }
+    } else if (!strcmp(line, "PADRELEASE")) {
+      pad_release(c);
+      pad_reply(c, &last_pad, pad_state_for(c));
+    } else if (!strcmp(line, "PADSTATE")) {
+      last_pad = -1; /* always answer, even when unchanged */
+      pad_reply(c, &last_pad, pad_state_for(c));
     } else if (!strcmp(line, "BYE")) {
       break;
     }
   }
+  pad_release(c);
   bc_client_close(c);
   pthread_join(writer, NULL);
   bc_remove(c);

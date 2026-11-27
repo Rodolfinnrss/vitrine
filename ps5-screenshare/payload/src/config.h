@@ -13,6 +13,7 @@
  *   resource_4k=0xb6     ResourceArbitrator id used for 1440p/2160p
  *   idle_timeout=15      seconds to keep capturing after the last viewer left
  *   notify=1             console notifications
+ *   pad=1                let viewers control the PS5 (virtual controller)
  */
 #ifndef PS5SS_CONFIG_H
 #define PS5SS_CONFIG_H
@@ -27,6 +28,7 @@ typedef struct {
   int resource_1080, resource_4k;
   int idle_timeout;
   int notify;
+  int pad;
 } ps5ss_config;
 
 void config_defaults(ps5ss_config *c);

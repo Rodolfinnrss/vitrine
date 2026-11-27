@@ -21,6 +21,7 @@ void config_defaults(ps5ss_config *c) {
   c->resource_4k = 0xb6;
   c->idle_timeout = 15;
   c->notify = 1;
+  c->pad = 1;
 }
 
 int config_apply(ps5ss_config *c, const char *token) {
@@ -69,6 +70,8 @@ int config_apply(ps5ss_config *c, const char *token) {
     c->idle_timeout = (int)n;
   } else if (!strcasecmp(key, "notify")) {
     c->notify = n ? 1 : 0;
+  } else if (!strcasecmp(key, "pad")) {
+    c->pad = n ? 1 : 0;
   } else {
     return -1;
   }

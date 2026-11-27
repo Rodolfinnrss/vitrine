@@ -14,10 +14,10 @@ SRCDIR    := src
 BUILD     := build
 
 SERVICE_SRCS := main.c avcap.c audio.c fwprofiles.c fwprofiles_data.c stream.c \
-                server.c status.c settings.c config.c control.c platform.c log.c
+                server.c status.c settings.c config.c control.c platform.c log.c pad.c
 SUPERVISOR_SRCS := supervisor.c control.c config.c settings.c platform.c log.c
 HOST_SRCS := main.c mock_capture.c fwprofiles.c fwprofiles_data.c stream.c \
-             server.c status.c settings.c config.c control.c platform.c log.c
+             server.c status.c settings.c config.c control.c platform.c log.c pad.c
 HEADERS := $(wildcard $(SRCDIR)/*.h)
 
 SERVICE_ELF    := $(BUILD)/ps5-screenshare-service.elf
@@ -70,6 +70,9 @@ test: host
 	cc $(CFLAGS_COMMON) -g -fsanitize=address,undefined -o $(BUILD)/host/test_fwprofiles \
 	  tests/test_fwprofiles.c $(SRCDIR)/fwprofiles.c $(SRCDIR)/fwprofiles_data.c
 	$(BUILD)/host/test_fwprofiles
+	cc $(CFLAGS_COMMON) -g -fsanitize=address,undefined -DPS5SS_HOST -o $(BUILD)/host/test_pad \
+	  tests/test_pad.c src/pad.c src/log.c src/platform.c
+	$(BUILD)/host/test_pad
 	python3 -I tools/host_test.py $(BUILD)/host/ps5ss-service
 	python3 -I tools/supervisor_test.py $(BUILD)/host/ps5ss-supervisor
 

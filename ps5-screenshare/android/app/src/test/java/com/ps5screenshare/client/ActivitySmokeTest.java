@@ -43,6 +43,20 @@ public class ActivitySmokeTest {
     }
 
     @Test
+    public void streamActivityShowsOnScreenController() {
+        Context ctx = RuntimeEnvironment.getApplication();
+        ActivityController<StreamActivity> c = Robolectric.buildActivity(StreamActivity.class,
+                StreamActivity.intent(ctx, "127.0.0.1", 1, "720p", 60, 0, true)).setup();
+        StreamActivity a = c.get();
+        assertNotNull(a.findViewById(R.id.pad));
+        assertEquals(View.VISIBLE, a.findViewById(R.id.pad).getVisibility());
+        assertEquals(false, ((PadView) a.findViewById(R.id.pad)).isActive()); // until the console answers
+        TextView b = a.findViewById(R.id.btn_pad);
+        assertEquals("Controle: ligado", b.getText().toString());
+        c.pause().stop().destroy();
+    }
+
+    @Test
     public void streamActivityDecodesLiveStream() throws Exception {
         String host = System.getProperty("ps5ss.host", "");
         assumeFalse("set PS5SS_TEST_HOST to run", host.isEmpty());

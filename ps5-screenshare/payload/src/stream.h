@@ -33,11 +33,12 @@ void bc_client_writer(client *c);
 void bc_client_close(client *c);          /* wake writer, stop sending */
 void bc_remove(client *c);                /* after writer returned */
 void bc_client_set_audio(client *c, int want);
-void bc_send_to(client *c, packet *p);    /* takes a reference */
+void bc_send_to(client *c, packet *p);    /* caller keeps its reference */
 
 /* Publish to every client (takes ownership of the caller's reference). */
 void bc_publish(packet *p);
-/* Replace the INFO packet sent to every new client, and send it to all. */
+/* Replace the INFO packet sent to every new client, and send it to all.
+ * Takes ownership of the caller's reference (do not unref afterwards). */
 void bc_set_info(packet *p);
 void bc_status(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 

@@ -16,7 +16,7 @@
     <string name="connect">Conectar</string>
     <string name="enter_ip">Digite o IP do PS5</string>
     <string name="help_title">Como usar</string>
-    <string name="help_body">1. Com o PS5 desbloqueado (jailbreak) e um ELF loader rodando, envie o arquivo ps5-screenshare.elf para a porta 9021 do console.\n2. O PS5 mostra a notificação \"PS5 Screen Share pronto em IP:9700\".\n3. Abra este app no celular (mesma rede Wi-Fi) e toque no console encontrado.\n\nDurante a transmissão toque na tela para ver os controles: áudio, ajuste de imagem e qualidade. 5 GHz no Wi-Fi ajuda bastante. A página http://IP-do-PS5:9700/ mostra o estado e o log.</string>
+    <string name="help_body">1. Com o PS5 desbloqueado (jailbreak) e um ELF loader rodando, envie o arquivo ps5-screenshare.elf para a porta 9021 do console.\n2. O PS5 mostra a notificação \"PS5 Screen Share pronto em IP:9700\".\n3. Abra este app no celular (mesma rede Wi-Fi) e toque no console encontrado.\n\nDurante a transmissão, os controles do PS5 aparecem sobre a imagem: toque neles para jogar (como no Remote Play). Toque em outro lugar da tela para mostrar ou esconder a barra com áudio, ajuste de imagem e qualidade. 5 GHz no Wi-Fi ajuda bastante. A página http://IP-do-PS5:9700/ mostra o estado e o log.</string>
     <string name="connecting_to">Conectando a %1$s…</string>
     <string name="reconnecting">Reconectando a %1$s…</string>
     <string name="waiting_video">Conectado. Aguardando o vídeo do PS5…</string>
@@ -30,6 +30,16 @@
     <string name="quality_title">Qualidade da transmissão (vale para todos)</string>
     <string name="applying_quality">Aplicando nova qualidade…</string>
     <string name="close">Sair</string>
+    <string name="pad_on">Controle: ligado</string>
+    <string name="pad_off">Controle: desligado</string>
+    <string name="pad_unavailable">Controle indisponível neste PS5. Abra /log no navegador para ver o motivo.</string>
+    <string name="pad_busy">Controle em uso por outro celular</string>
+    <string name="pad_label_free">controle: livre (toque para assumir)</string>
+    <string name="pad_label_yours">controle: com você</string>
+    <string name="pad_label_busy">controle: em uso por outro celular</string>
+    <string name="pad_label_unavailable">controle: indisponível</string>
+    <string name="pad_label_hidden">controle: oculto</string>
+    <string name="pad_label_unknown">controle: verificando…</string>
 
     <string-array name="resolutions">
         <item>Manter a do PS5</item>

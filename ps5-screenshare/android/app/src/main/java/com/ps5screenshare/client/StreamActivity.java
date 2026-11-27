@@ -63,7 +63,14 @@ public final class StreamActivity extends Activity implements SurfaceHolder.Call
     private AspectFrame aspect;
     private TextView stats, message;
     private View controls;
-    private Button audioButton, fitButton;
+    private Button audioButton, fitButton, padButton;
+    private PadView pad;
+    private boolean padVisible = true;
+    /** -1 until the console has said whether a controller is available. */
+    private volatile int padState = -1;
+    private volatile PadModel.State padLatest = new PadModel.State();
+    private long padSeq;
+    private boolean padTicking;
 
     private volatile boolean running;
     private volatile StreamClient client;
@@ -114,8 +121,14 @@ public final class StreamActivity extends Activity implements SurfaceHolder.Call
             updateButtons();
         });
         findViewById(R.id.btn_quality).setOnClickListener(v -> chooseQuality());
+        pad = findViewById(R.id.pad);
+        pad.setListener(this::onPadTouch);
+        padButton = findViewById(R.id.btn_pad);
+        padButton.setOnClickListener(v -> togglePad());
+        padVisible = Prefs.get(this).getBoolean(Prefs.PAD_VISIBLE, true);
         aspect.setFill(Prefs.get(this).getBoolean(Prefs.FILL, false));
         updateButtons();
+        applyPadVisibility();
         showMessage(getString(R.string.connecting_to, host));
     }
 
@@ -125,6 +138,9 @@ public final class StreamActivity extends Activity implements SurfaceHolder.Call
         hideSystemUi();
         running = true;
         gotVideo = false;
+        padState = -1;
+        padLatest = new PadModel.State();
+        applyPadVisibility();
         audio = new AudioPlayer();
         audio.setMuted(!audioOn);
         audio.start();
@@ -139,6 +155,8 @@ public final class StreamActivity extends Activity implements SurfaceHolder.Call
         super.onPause();
         running = false;
         ui.removeCallbacks(tick);
+        ui.removeCallbacks(padTick);
+        padTicking = false;
         StreamClient c = client;
         if (c != null) c.close();
         if (network != null) {
@@ -192,6 +210,8 @@ public final class StreamActivity extends Activity implements SurfaceHolder.Call
             first = false;
             try (StreamClient c = new StreamClient(host, port, hello, 5000)) {
                 client = c;
+                padState = -1;
+                ui.post(this::applyPadVisibility);
                 if (!running) break; // paused while connecting
                 if (!gotVideo) showMessage(getString(R.string.waiting_video));
                 requestKeyframe();
@@ -273,6 +293,18 @@ public final class StreamActivity extends Activity implements SurfaceHolder.Call
     }
 
     @Override
+    public void onPad(int state) {
+        int previous = padState;
+        padState = state;
+        ui.post(this::applyPadVisibility);
+        if (state == StreamClient.PAD_UNAVAILABLE && previous != StreamClient.PAD_UNAVAILABLE) {
+            showMessage(getString(R.string.pad_unavailable), 5000);
+        } else if (state == StreamClient.PAD_BUSY && previous != StreamClient.PAD_BUSY) {
+            showMessage(getString(R.string.pad_busy), 3000);
+        }
+    }
+
+    @Override
     public void onPong(String token) {
         try {
             rttMs = SystemClock.elapsedRealtime() - Long.parseLong(token.trim());
@@ -331,6 +363,70 @@ public final class StreamActivity extends Activity implements SurfaceHolder.Call
         requestKeyframe();
     }
 
+    // ------------------------------------------------------- controller --
+
+    /** The overlay reports a new state (a touch went down, moved or lifted). */
+    private void onPadTouch(PadModel.State s) {
+        // Inactive pad (hidden, unavailable, or being switched off): never send,
+        // a PAD line would take the controller back.
+        if (!pad.isActive()) return;
+        padLatest = s;
+        if (padState == StreamClient.PAD_BUSY && pad.isHeld()) {
+            showMessage(getString(R.string.pad_busy), 2000);
+        }
+        sendPadNow(s);
+        if (pad.isHeld() && !padTicking) {
+            padTicking = true;
+            ui.postDelayed(padTick, 50);
+        }
+    }
+
+    private void sendPadNow(PadModel.State s) {
+        if (padState < 0 || padState == StreamClient.PAD_UNAVAILABLE) return;
+        padSeq++;
+        sendAsync(s.toLine(padSeq));
+    }
+
+    /** While a finger is on the controller, repeat its state every 50 ms (the console
+     * neutralises the pad after 250 ms without input). */
+    private final Runnable padTick = new Runnable() {
+        @Override
+        public void run() {
+            if (!running || !pad.isHeld()) {
+                padTicking = false;
+                return;
+            }
+            sendPadNow(padLatest);
+            ui.postDelayed(this, 50);
+        }
+    };
+
+    private void applyPadVisibility() {
+        boolean usable = padState == StreamClient.PAD_FREE || padState == StreamClient.PAD_YOURS
+                || padState == StreamClient.PAD_BUSY;
+        pad.setVisibility(padVisible ? View.VISIBLE : View.GONE);
+        pad.setActive(padVisible && usable);
+        padButton.setText(padVisible ? R.string.pad_on : R.string.pad_off);
+    }
+
+    private void togglePad() {
+        padVisible = !padVisible;
+        Prefs.get(this).edit().putBoolean(Prefs.PAD_VISIBLE, padVisible).apply();
+        if (!padVisible) sendAsync("PADRELEASE");
+        applyPadVisibility();
+    }
+
+    private String padLabel() {
+        if (!padVisible) return getString(R.string.pad_label_hidden);
+        switch (padState) {
+            case StreamClient.PAD_FREE: return getString(R.string.pad_label_free);
+            case StreamClient.PAD_YOURS: return getString(R.string.pad_label_yours);
+            case StreamClient.PAD_BUSY: return getString(R.string.pad_label_busy);
+            case StreamClient.PAD_UNAVAILABLE: return getString(R.string.pad_label_unavailable);
+            default: return getString(R.string.pad_label_unknown);
+        }
+    }
+
     // ----------------------------------------------------------------- UI --
 
     private final Runnable tick = new Runnable() {
@@ -349,9 +445,9 @@ public final class StreamActivity extends Activity implements SurfaceHolder.Call
             lastBytes = bytes;
             lastStatsAt = now;
             VideoDecoder d = decoder;
-            stats.setText(String.format(Locale.ROOT, "%s\n%.0f fps · %.1f Mbps · ping %s · descartes %d",
+            stats.setText(String.format(Locale.ROOT, "%s\n%.0f fps · %.1f Mbps · ping %s · descartes %d\n%s",
                     info.isEmpty() ? host : info, fpsNow, mbps,
-                    rttMs >= 0 ? rttMs + " ms" : "-", d != null ? d.droppedFrames() : 0));
+                    rttMs >= 0 ? rttMs + " ms" : "-", d != null ? d.droppedFrames() : 0, padLabel()));
             ui.postDelayed(this, 1000);
         }
     };

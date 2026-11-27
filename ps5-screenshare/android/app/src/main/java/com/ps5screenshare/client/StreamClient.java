@@ -28,6 +28,12 @@ public final class StreamClient implements Closeable {
     public static final int PKT_AUDIO = 3;
     public static final int PKT_STATUS = 4;
     public static final int PKT_PONG = 5;
+    public static final int PKT_PAD = 6;
+    /** PKT_PAD values (see payload/src/pad.h). */
+    public static final int PAD_UNAVAILABLE = 0;
+    public static final int PAD_FREE = 1;
+    public static final int PAD_YOURS = 2;
+    public static final int PAD_BUSY = 3;
     public static final int FLAG_KEYFRAME = 1;
     private static final int MAX_PACKET = 32 * 1024 * 1024;
 
@@ -37,6 +43,8 @@ public final class StreamClient implements Closeable {
         void onAudio(byte[] data, long ptsUs);
         void onStatus(String text);
         void onPong(String token);
+        /** One of the PAD_* values above. */
+        void onPad(int state);
     }
 
     private final Socket socket;
@@ -113,6 +121,9 @@ public final class StreamClient implements Closeable {
                         break;
                     case PKT_PONG:
                         l.onPong(new String(payload, StandardCharsets.UTF_8));
+                        break;
+                    case PKT_PAD:
+                        l.onPad(payload.length > 0 ? payload[0] & 0xff : PAD_UNAVAILABLE);
                         break;
                     default:
                         break; // keepalive and future packet types

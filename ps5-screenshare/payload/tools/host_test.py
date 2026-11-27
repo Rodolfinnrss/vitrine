@@ -14,6 +14,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 
@@ -305,6 +306,119 @@ def test_supervised_restart_and_quit():
         s.stop()
 
 
+def wait_pad(client, limit=3000):
+    """Reads packets until the next PKT_PAD and returns its availability byte."""
+    for _ in range(limit):
+        t, _, _, d = client.packet()
+        if t == ps.PKT_PAD:
+            return d[0]
+    return None
+
+
+def pad_status():
+    return json.loads(http("/status")[2])["pad"]
+
+
+class KeepAlive:
+    """Sends a PAD line every 50 ms, as the Android app does while it holds the
+    controller (the console neutralises the pad after 250 ms of silence)."""
+
+    def __init__(self, client, template):
+        self.client, self.template, self.seq = client, template, 100
+        self.running = True
+        self.thread = threading.Thread(target=self.loop, daemon=True)
+        self.thread.start()
+
+    def loop(self):
+        while self.running:
+            self.seq += 1
+            try:
+                self.client.send_line(self.template % self.seq)
+            except OSError:
+                return
+            time.sleep(0.05)
+
+    def stop(self):
+        self.running = False
+        self.thread.join(2)
+
+
+def test_pad_control():
+    print("virtual controller: ownership, input, release, malformed input")
+    s = Service()
+    try:
+        a = ps.Client("127.0.0.1", PORT, "HELLO 1 audio=0")
+        check(wait_pad(a) == 1, "a free controller is announced to a viewer")
+        a.send_line("PAD 1,16384,128,128,128,128,0,0")
+        check(wait_pad(a) == 2, "first viewer takes control (PAD_YOURS)")
+        keep_a = KeepAlive(a, "PAD %d,16384,128,128,128,128,0,0")
+        time.sleep(0.3)
+        st = pad_status()
+        check(st["available"] and st["owned"], "status: pad owned")
+        check(st["buttons"] == "0x4000" and st["writes"] > 0, "cross reached the backend (%s)" % st)
+
+        b = ps.Client("127.0.0.1", PORT, "HELLO 1 audio=0")
+        check(wait_pad(b) == 3, "second viewer sees the controller busy")
+        b.send_line("PAD 1,8192,128,128,128,128,0,0")
+        time.sleep(0.2)
+        check(pad_status()["buttons"] == "0x4000", "busy viewer's input is not applied")
+
+        keep_a.stop()
+        a.close()
+        time.sleep(0.3)
+        st = pad_status()
+        check(not st["owned"] and st["buttons"] == "0x0", "owner disconnect releases and neutralises (%s)" % st)
+
+        keep_b = KeepAlive(b, "PAD %d,8192,128,128,128,128,0,0")
+        check(wait_pad(b) == 2, "the other viewer takes over after the release")
+        time.sleep(0.2)
+        check(pad_status()["buttons"] == "0x2000", "circle reached the backend")
+
+        keep_b.stop()
+        # Malformed lines must be ignored while the owner keeps going.
+        b.send_line("PAD 3,0x10,0,0,0,0,0,0")
+        b.send_line("PAD 4,4294967295,0,0,0,0,0,0")
+        b.send_line("PAD 5,8192,300,0,0,0,0,0")
+        keep_b = KeepAlive(b, "PAD %d,8192,128,128,128,128,0,0")
+        time.sleep(0.3)
+        keep_b.stop()
+        check(pad_status()["buttons"] == "0x2000", "malformed PAD lines are ignored")
+        b.send_line("PADSTATE")
+        check(wait_pad(b) == 2, "PADSTATE is always answered; connection still works")
+
+        b.send_line("PADRELEASE")
+        check(wait_pad(b) == 1, "PADRELEASE is answered with 'free'")
+        check(not pad_status()["owned"], "PADRELEASE gives the controller up")
+
+        b.send_line("PAD 6,8192,128,128,128,128,0,0")
+        check(wait_pad(b) == 2, "viewer re-takes control")
+        time.sleep(2.5)
+        check(not pad_status()["owned"], "silent owner is released after 2 s")
+        b.close()
+    finally:
+        s.stop()
+
+    s = Service(env={"PS5SS_MOCK_PAD": "0"})
+    try:
+        c = ps.Client("127.0.0.1", PORT, "HELLO 1 audio=0")
+        check(wait_pad(c) == 0, "no virtual controller: viewers are told it is unavailable")
+        c.send_line("PAD 1,16384,128,128,128,128,0,0")
+        time.sleep(0.2)
+        st = pad_status()
+        check(not st["available"] and st["writes"] == 0, "unavailable pad takes no input")
+        c.close()
+    finally:
+        s.stop()
+
+    s = Service(args=("pad=0",))
+    try:
+        c = ps.Client("127.0.0.1", PORT, "HELLO 1 audio=0")
+        check(wait_pad(c) == 0, "pad=0 in config.ini-style arguments disables the controller")
+        c.close()
+    finally:
+        s.stop()
+
+
 def main():
     make_clip()
     try:
@@ -313,6 +427,7 @@ def main():
         test_limits_and_bad_input()
         test_recovery_and_variant_rotation()
         test_supervised_restart_and_quit()
+        test_pad_control()
     finally:
         if not FAILS:
             shutil.rmtree(WORK, ignore_errors=True)

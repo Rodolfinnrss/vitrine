@@ -16,8 +16,8 @@ import sys
 import time
 
 PORT = 9700
-PKT_KEEPALIVE, PKT_INFO, PKT_VIDEO, PKT_AUDIO, PKT_STATUS, PKT_PONG = range(6)
-NAMES = {0: "KEEPALIVE", 1: "INFO", 2: "VIDEO", 3: "AUDIO", 4: "STATUS", 5: "PONG"}
+PKT_KEEPALIVE, PKT_INFO, PKT_VIDEO, PKT_AUDIO, PKT_STATUS, PKT_PONG, PKT_PAD = range(7)
+NAMES = {0: "KEEPALIVE", 1: "INFO", 2: "VIDEO", 3: "AUDIO", 4: "STATUS", 5: "PONG", 6: "PAD"}
 
 
 def discover(timeout=1.5, port=PORT, targets=("255.255.255.255",)):

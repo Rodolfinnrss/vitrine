@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later */
 #include "status.h"
 
+#include "pad.h"
 #include "settings.h"
 #include "stream.h"
 
@@ -89,6 +90,8 @@ size_t status_json(char *out, size_t cap, int port) {
   char state[sizeof(st.state) * 2], clients[2048];
   json_escape(state, sizeof(state), st.state);
   bc_describe(clients, sizeof(clients));
+  pad_info pad;
+  pad_get_info(&pad);
   int n = snprintf(out, cap,
       "{\"app\":\"ps5-screenshare\",\"version\":\"%s\",\"protocol\":1,\"port\":%d,"
       "\"firmware\":\"%x.%02x\",\"firmware_id\":\"0x%08x\",\"profile\":\"%s\","
@@ -96,13 +99,15 @@ size_t status_json(char *out, size_t cap, int port) {
       "\"active\":{\"width\":%d,\"height\":%d,\"fps\":%d,\"kbps\":%d,\"audio\":%d},"
       "\"requested\":{\"resolution\":\"%s\",\"fps\":%d,\"kbps\":%d,\"audio\":%d},"
       "\"frames\":%llu,\"bytes\":%llu,\"keyframes\":%llu,\"audio_blocks\":%llu,"
+      "\"pad\":{\"available\":%d,\"owned\":%d,\"writes\":%llu,\"buttons\":\"0x%x\"},"
       "\"clients\":%s}",
       PS5SS_VERSION, port, (st.fw >> 24) & 0xff, (st.fw >> 16) & 0xff, st.fw,
       st.profile, st.generation, state, (unsigned)st.last_error, st.width,
       st.height, st.fps, st.kbps, st.audio, settings_resolution_name(cs.height),
       cs.fps, cs.kbps, cs.audio, (unsigned long long)st.frames,
       (unsigned long long)st.bytes, (unsigned long long)st.keyframes,
-      (unsigned long long)st.audio_blocks, clients);
+      (unsigned long long)st.audio_blocks, pad.available, pad.owned,
+      (unsigned long long)pad.writes, pad.buttons, clients);
   if (n < 0) return 0;
   return (size_t)n < cap ? (size_t)n : cap - 1;
 }

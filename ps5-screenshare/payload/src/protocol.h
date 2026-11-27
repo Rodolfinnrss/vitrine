@@ -9,6 +9,12 @@
  *     KEY                                  ask for an IDR frame
  *     AUDIO 0|1                            stop/start audio for this client
  *     PING <token>                         answered by a PONG packet
+ *     PAD <seq>,<buttons>,<lx>,<ly>,<rx>,<ry>,<l2>,<r2>
+ *                                          controller state (see pad.h); claims the
+ *                                          controller if nobody has it. Send every
+ *                                          50 ms while holding it (at least 100 ms)
+ *     PADRELEASE                           give the controller up
+ *     PADSTATE                             ask for PKT_PAD again
  *   server -> client : 8-byte stream header then packets
  *     header  "PS5S" u16 version u16 reserved              (big endian)
  *     packet  u8 type, u8 flags, u16 reserved, u32 length, u64 pts_us, payload
@@ -38,6 +44,7 @@ enum {
   PKT_AUDIO = 3,
   PKT_STATUS = 4,
   PKT_PONG = 5,
+  PKT_PAD = 6,       /* 1 byte: pad availability for this viewer (PAD_* in pad.h) */
 };
 
 #define PKT_FLAG_KEYFRAME 0x01
