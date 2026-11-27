@@ -119,6 +119,12 @@ pad=1               ; deixar os celulares controlarem o PS5 (0 desliga)
 Os logs ficam em `/data/ps5-screenshare/log.txt` e em
 `http://IP-DO-PS5:9700/log`. O estado em JSON fica em `/status`.
 
+## App para Windows
+
+Na pasta [`windows/`](windows/README.md) tem um app para PC: vê a tela e o áudio do PS5 e joga
+com o teclado (as teclas são configuráveis). Para conectar de fora de casa, use uma VPN que
+leve até a sua rede; o PS5 não tem senha, então não abra a porta dele na internet.
+
 ## Assistir no PC (opcional)
 
 ```sh
