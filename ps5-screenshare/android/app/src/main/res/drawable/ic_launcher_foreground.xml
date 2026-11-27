@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- screen -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M30,36h48a4,4 0,0 1,4 4v26a4,4 0,0 1,-4 4H30a4,4 0,0 1,-4 -4V40a4,4 0,0 1,4 -4zM31,41v24h46V41z" />
+    <!-- stand -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M46,72h16v4H46z" />
+    <!-- play triangle -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M49,46l12,7 -12,7z" />
+</vector>
