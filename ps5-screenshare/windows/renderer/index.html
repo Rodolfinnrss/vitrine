@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PS5 Screen Share</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="connect" class="screen active">
+    <div class="card">
+      <h1>PS5 Screen Share</h1>
+      <p class="muted">Veja a tela do PS5 e jogue com o teclado.</p>
+
+      <form id="form" autocomplete="off">
+        <fieldset class="mode">
+          <legend>Como conectar</legend>
+          <label class="check"><input type="radio" name="mode" value="lan" checked> Rede de casa (mesma rede do PS5)</label>
+          <label class="check"><input type="radio" name="mode" value="relay"> Pela internet (de outra rede, sem VPN)</label>
+        </fieldset>
+
+        <div id="lan-addr">
+          <label class="field">Endereço do PS5
+            <input id="host" name="host" placeholder="192.168.0.10" spellcheck="false">
+          </label>
+        </div>
+
+        <div id="relay-addr" hidden>
+          <label class="field">Servidor de acesso
+            <input id="relayHost" name="relayHost" placeholder="meu-servidor.com" spellcheck="false">
+          </label>
+          <div class="row">
+            <label class="field">Porta do servidor
+              <input id="relayPort" name="relayPort" type="number" min="1" max="65535" value="9800">
+            </label>
+            <label class="field">Código de pareamento
+              <input id="pairCode" name="pairCode" placeholder="0011-2233-4455-..." spellcheck="false" autocomplete="off">
+            </label>
+          </div>
+          <p class="hint">O código aparece na página do PS5 (http://IP-do-PS5:9700), quando ele está na sua rede.</p>
+        </div>
+
+        <div class="row">
+          <label class="field" id="port-field">Porta
+            <input id="port" name="port" type="number" min="1" max="65535" value="9700">
+          </label>
+          <label class="field">Resolução
+            <select id="resolution" name="resolution">
+              <option value="720p">720p (menos internet)</option>
+              <option value="1080p" selected>1080p</option>
+              <option value="1440p">1440p</option>
+              <option value="2160p">4K</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="field">Quadros
+            <select id="fps" name="fps">
+              <option value="60" selected>60 fps</option>
+              <option value="30">30 fps</option>
+            </select>
+          </label>
+          <label class="field">Taxa de vídeo
+            <select id="kbps" name="kbps">
+              <option value="5000">5 Mbps</option>
+              <option value="8000" selected>8 Mbps</option>
+              <option value="12000">12 Mbps</option>
+              <option value="16000">16 Mbps</option>
+              <option value="32000">32 Mbps</option>
+            </select>
+          </label>
+        </div>
+        <label class="check"><input id="audio" name="audio" type="checkbox" checked> Ouvir o áudio do PS5</label>
+
+        <p id="notice" class="notice" hidden></p>
+
+        <div class="buttons">
+          <button type="submit" class="primary" id="connect-btn">Conectar</button>
+          <button type="button" id="discover-btn">Procurar na rede</button>
+          <button type="button" id="keys-open">Teclas…</button>
+        </div>
+      </form>
+
+      <ul id="found" class="found"></ul>
+      <p id="connect-status" class="status" role="status"></p>
+
+      <details class="help">
+        <summary>Conectar de fora de casa</summary>
+        <p>O PS5 não tem senha, então não abra a porta dele na internet. Para acessar de fora,
+           use uma VPN que leve até a sua rede (WireGuard no roteador ou Tailscale) e digite
+           o endereço do PS5 como se estivesse em casa.</p>
+      </details>
+    </div>
+  </main>
+
+  <main id="player" class="screen">
+    <canvas id="video" aria-label="Tela do PS5"></canvas>
+    <pre id="stats" class="stats" hidden></pre>
+    <div id="message" class="message" role="status" hidden></div>
+    <div id="toolbar" class="toolbar">
+      <button id="btn-mute" type="button">Som: ligado</button>
+      <button id="btn-fill" type="button">Imagem: ajustar</button>
+      <button id="btn-stats" type="button">Estatísticas</button>
+      <button id="btn-full" type="button">Tela cheia (F11)</button>
+      <button id="btn-keys-play" type="button">Teclas…</button>
+      <button id="btn-leave" type="button">Sair</button>
+    </div>
+  </main>
+
+  <dialog id="keys-dialog">
+    <form method="dialog" id="keys-form">
+      <h2>Teclas do controle</h2>
+      <p class="muted">Clique num botão e pressione a tecla desejada. Esc cancela, Delete apaga.
+         Se a tecla já for de outro botão, os dois trocam de lugar.</p>
+      <div class="keys-scroll">
+        <table id="keys-table"><tbody></tbody></table>
+      </div>
+      <div class="buttons">
+        <button type="button" id="keys-default">Padrão</button>
+        <span class="spacer"></span>
+        <button type="button" id="keys-cancel">Cancelar</button>
+        <button type="button" class="primary" id="keys-save">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="../src/protocol.js"></script>
+  <script src="../src/bindings.js"></script>
+  <script src="video.js"></script>
+  <script src="audio.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

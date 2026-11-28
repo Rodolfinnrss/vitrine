@@ -1,0 +1,57 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.ps5screenshare.client"
+    compileSdk 34
+    buildToolsVersion "34.0.0"
+
+    defaultConfig {
+        applicationId "com.ps5screenshare.client"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    buildTypes {
+        release {
+            // No secrets in the repository: release builds are signed with the
+            // local Gradle debug key. Sign with your own key for distribution.
+            signingConfig signingConfigs.debug
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            systemProperty "ps5ss.host", System.getenv("PS5SS_TEST_HOST") ?: ""
+            systemProperty "ps5ss.port", System.getenv("PS5SS_TEST_PORT") ?: "9700"
+            // Robolectric downloads the Android framework jar at test time.
+            systemProperty "robolectric.dependency.repo.url",
+                    System.getenv("ROBOLECTRIC_REPO") ?: "https://repo1.maven.org/maven2"
+        }
+    }
+
+    lint {
+        abortOnError true
+        checkReleaseBuilds true
+    }
+}
+
+dependencies {
+    testImplementation "junit:junit:4.13.2"
+    testImplementation("org.robolectric:robolectric:4.14.1") {
+        // Only needed for native SQLite/graphics, which these tests do not use.
+        exclude group: "org.robolectric", module: "nativeruntime-dist-compat"
+    }
+}
