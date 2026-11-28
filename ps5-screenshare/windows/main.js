@@ -8,13 +8,15 @@
  */
 'use strict';
 
+const fs = require('node:fs');
 const path = require('node:path');
-const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu } = require('electron');
 const Settings = require('./src/settings');
 const Protocol = require('./src/protocol');
 const { Ps5Connection } = require('./src/stream');
 const { discover } = require('./src/discovery');
 const Secure = require('./src/secure');
+const RelayHost = require('./src/relay-host');
 
 // Commands the page may send. Anything else is dropped here.
 const ALLOWED_LINE = /^(PAD \d{1,10},\d{1,10},\d{1,3},\d{1,3},\d{1,3},\d{1,3},\d{1,3},\d{1,3}|PADRELEASE|PADSTATE|KEY|PING \d{1,16}|AUDIO [01]|SET [a-z0-9= ]{1,120})$/;
@@ -23,6 +25,94 @@ let win = null;
 let conn = null;
 
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
+const remoteFile = () => path.join(app.getPath('userData'), 'remote.json');
+
+/** Whether this PC hosts the meeting server (acesso de fora de casa). */
+let remote = { enabled: false, port: RelayHost.DEFAULT_PORT };
+
+function loadRemote() {
+  try {
+    const o = JSON.parse(fs.readFileSync(remoteFile(), 'utf8'));
+    remote = {
+      enabled: o.enabled === true,
+      port: Number(o.port) > 0 && Number(o.port) < 65536 ? Number(o.port) : RelayHost.DEFAULT_PORT,
+    };
+  } catch (e) {
+    // no file yet: keep the defaults
+  }
+}
+
+function saveRemote() {
+  try {
+    fs.writeFileSync(remoteFile(), JSON.stringify(remote));
+  } catch (e) {
+    // the setting is still in memory for this run
+  }
+}
+
+async function setRemoteEnabled(enabled) {
+  if (enabled) {
+    try {
+      await RelayHost.start(remote.port);
+      remote.enabled = true;
+    } catch (err) {
+      remote.enabled = false;
+      const reason = err.code === 'EADDRINUSE'
+        ? 'A porta ' + remote.port + ' ja esta em uso neste PC.'
+        : 'Nao foi possivel ligar o acesso: ' + err.message;
+      dialog.showErrorBox('PS5 Screen Share', reason);
+    }
+  } else {
+    await RelayHost.stop();
+    remote.enabled = false;
+  }
+  saveRemote();
+  buildMenu();
+}
+
+function showAddresses() {
+  const a = RelayHost.addresses();
+  const running = RelayHost.isRunning();
+  const port = running ? RelayHost.runningPort() : remote.port;
+  const lines = [
+    'Acesso de fora de casa: ' + (running ? 'ligado na porta ' + port : 'desligado'),
+    '',
+    'No config.ini do PS5 (pasta /data/ps5-screenshare):',
+    '    relay=' + (a.lan[0] || 'IP-DESTE-PC') + ':' + port,
+    '',
+    'Nos apps de fora de casa, o endereco do servidor e:',
+    '    ' + (a.vpn[0] || 'instale o Tailscale neste PC para ver o endereco 100.x') + ':' + port,
+    '',
+    'O codigo de pareamento aparece na pagina inicial do PS5 (http://IP-DO-PS5:9700).',
+  ];
+  dialog.showMessageBox(win || undefined, {
+    type: 'info',
+    title: 'PS5 Screen Share - endereços',
+    message: 'Endereços do acesso de fora de casa',
+    detail: lines.join('\n'),
+    buttons: ['OK'],
+  });
+}
+
+function buildMenu() {
+  const template = [
+    {
+      label: 'Acesso de fora de casa',
+      submenu: [
+        {
+          label: 'Hospedar acesso neste PC',
+          type: 'checkbox',
+          checked: remote.enabled,
+          click: (item) => setRemoteEnabled(item.checked),
+        },
+        { label: 'Ver endereços', click: showAddresses },
+        { type: 'separator' },
+        { role: 'quit', label: 'Sair' },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 
 function toPage(channel, ...args) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, ...args);
@@ -123,8 +213,14 @@ if (!app.requestSingleInstanceLock()) {
     }
   });
   app.whenReady().then(() => {
-    Menu.setApplicationMenu(null);
+    loadRemote();
+    buildMenu();
     createWindow();
+    if (remote.enabled) setRemoteEnabled(true);
   });
   app.on('window-all-closed', () => app.quit());
+  app.on('before-quit', () => {
+    dropConnection();
+    RelayHost.stop();
+  });
 }

@@ -4,7 +4,7 @@ Veja a tela do PS5 no PC e jogue com o teclado, como no Remote Play.
 
 - Vídeo H.264 por hardware (WebCodecs, dentro do Chromium do Electron) e áudio.
 - Controle pelo teclado: cada botão do PS5 é uma tecla que você escolhe.
-- Conexão pela rede de casa, ou de fora de casa por VPN (veja abaixo).
+- Conexão pela rede de casa, ou de fora de casa pelo seu PC (servidor de acesso) ou por VPN.
 - Precisa do payload `ps5-screenshare.elf` rodando no PS5 (pasta `payload/`).
 
 Requisitos: Windows 10 ou 11 de 64 bits.
@@ -35,6 +35,29 @@ igual em teclados ABNT2 e US.
 
 Outras teclas durante a transmissão: **F11** tela cheia. Ao trocar de janela, todas as teclas
 são soltas no console, para nada ficar "preso".
+
+## Acesso de fora de casa (este PC como servidor)
+
+Não precisa de servidor pago nem de abrir porta no roteador. Este PC faz o papel do servidor de
+acesso, e o Tailscale (gratuito) leva o caminho até ele de fora.
+
+1. **Tailscale:** instale no PC e no aparelho de fora (celular ou outro PC), com a mesma conta.
+   É instalação única; depois ele fica ligado sozinho.
+2. **PS5:** pelo FTP, no arquivo `/data/ps5-screenshare/config.ini`, deixe a linha
+   `relay=IP-DESTE-PC:9800` (o IP da rede de casa aparece no menu, em **Ver endereços**).
+   Depois envie o `ps5-screenshare.elf` de novo.
+3. **Este PC:** no menu **Acesso de fora de casa**, marque **Hospedar acesso neste PC**. O app
+   passa a aceitar conexões na porta 9800 e lembra a escolha ao abrir. Na primeira vez, o Windows
+   pode pedir para liberar o app no firewall: permita.
+4. **De fora:** no app do PC ou no APK, escolha **Pela internet**, informe o endereço **100.x** deste
+   PC (menu **Ver endereços**) e a porta 9800, e o código de pareamento da página `http://IP-do-PS5:9700`.
+
+Pontos de atenção:
+- Este PC precisa estar ligado, com o app aberto, e o PS5 com o payload rodando.
+- O servidor só repassa bytes: não vê a imagem nem os comandos (a conexão é criptografada com o código).
+- O IP de casa pode mudar; se mudar, o `relay=` do PS5 precisa ser atualizado. Reserve um IP fixo
+  para este PC no roteador, se puder.
+- De fora, use 720p a 5 Mbps: o envio da internet de casa costuma ser o limite.
 
 ## Conectar de fora de casa
 
@@ -103,6 +126,7 @@ Windows de qualquer lugar.
 ```
 npm test                 # unitários: protocolo, teclas, configurações, conexão, busca
 npm run test:e2e         # app de verdade contra o payload (precisa do build host do payload)
+npm run test:e2e:remote  # o app hospeda o servidor de acesso quando ligado (remote.json)
 ```
 
 O teste de ponta a ponta sobe o app Electron, conecta num payload de teste (`make host` em
@@ -120,7 +144,9 @@ src/stream.js      conexão com o PS5 (tempo limite, eventos)
 src/discovery.js   busca de consoles por broadcast
 src/settings.js    configurações salvas
 renderer/          tela: conexão, vídeo (video.js), áudio (audio.js), teclas e telas (app.js)
-scripts/package.js gera o app para Windows
+src/relay-host.js servidor de acesso dentro do app (ligado pelo menu)
+src/relay-server.js cópia de relay/server.js (gerada por scripts/sync-relay.js)
+scripts/package.js gera o app e o ZIP para Windows
 tests/             testes unitários e de ponta a ponta
 ```
 

@@ -11,7 +11,8 @@
     "test": "node --test \"tests/*.test.js\"",
     "dist": "node scripts/package.js",
     "test:e2e": "node tests/e2e/app.e2e.js",
-    "test:e2e:relay": "node tests/e2e/relay.e2e.js"
+    "test:e2e:relay": "node tests/e2e/relay.e2e.js",
+    "test:e2e:remote": "node tests/e2e/remote.e2e.js"
   },
   "devDependencies": {
     "@electron/packager": "20.3.1",

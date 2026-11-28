@@ -7,9 +7,14 @@
 'use strict';
 
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const { packager } = require('@electron/packager');
+const { sync } = require('./sync-relay');
 
 const root = path.resolve(__dirname, '..');
+const out = path.join(root, 'dist');
+
+sync(); // the app ships the same meeting server as relay/
 
 packager({
   dir: root,
@@ -29,6 +34,11 @@ packager({
   ],
 }).then((paths) => {
   for (const p of paths) console.log('pronto: ' + p);
+  // One zip to copy to the PC: unpack it and run "PS5 Screen Share.exe".
+  const zip = path.join(out, 'ps5-screenshare-windows.zip');
+  const folder = path.basename(paths[0]);
+  execFileSync('zip', ['-qr', zip, folder], { cwd: out, stdio: 'inherit' });
+  console.log('pronto: ' + zip);
 }).catch((err) => {
   console.error(err);
   process.exit(1);
