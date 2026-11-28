@@ -17,6 +17,7 @@
 
 #include <errno.h>
 #include <pthread.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -26,9 +27,19 @@
 #define IDLE_MS 2000
 #define TICK_US 4000
 
+/* OFF: disabled, failed or shut down. LAZY: enabled, libScePad not touched
+ * yet (the console's pad library is only loaded when a viewer first sends
+ * input, so the stream never depends on it). ON: virtual controller live. */
+enum { MODE_OFF, MODE_LAZY, MODE_ON };
+
+/* Present while libScePad is being initialised. If the service dies there,
+ * the next start finds it and keeps the controller off instead of dying again. */
+#define PROBE_PATH PS5SS_DATA_DIR "/pad-probe.txt"
+
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_init_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t g_thread;
-static int g_started, g_running, g_healthy;
+static int g_started, g_running, g_mode;
 static const void *g_owner;
 static pad_state g_state;
 static const pad_state g_neutral = {0, 128, 128, 128, 128, 0, 0};
@@ -58,11 +69,10 @@ static int backend_write(const pad_state *s) {
 }
 static void backend_destroy(void) {}
 #else
-#include <ps5/kernel.h>
-
-int sceKernelLoadStartModule(const char *, size_t, const void *, uint32_t, void *, uint32_t *);
+#include <dlfcn.h>
 
 static struct {
+  void *lib;
   int (*init)(void);
   int (*privilege)(int);
   int (*add)(const void *, void *);
@@ -72,34 +82,35 @@ static struct {
   int privileged, owned;
 } api;
 
-static void *export(uint32_t module, const char *name) {
-  return (void *)kernel_dynlib_dlsym(getpid(), module, name);
+/* Same loader the capture uses (dlopen/dlsym), which works on every firmware
+ * the capture does. A resolver may answer -1 instead of NULL. */
+static void *export(const char *name) {
+  void *p = dlsym(api.lib, name);
+  if (!p || (intptr_t)p == -1) {
+    LOG("pad: %s not found", name);
+    return NULL;
+  }
+  return p;
 }
 
 static int backend_init(void) {
-  uint32_t module = 0;
-  if (kernel_dynlib_handle(getpid(), "libScePad.sprx", &module)) {
-    int rc = sceKernelLoadStartModule("/system/common/lib/libScePad.sprx", 0, NULL, 0, NULL, NULL);
-    LOG("pad: load libScePad -> 0x%x", rc);
-    /* Use the handle LoadStartModule returns. Looking the module up by name
-     * again can fail right after a successful load on newer firmware. */
-    if (rc <= 0) return -1;
-    module = (uint32_t)rc;
-  }
-  api.init = export(module, "scePadInit");
-  api.privilege = export(module, "scePadSetProcessPrivilege");
-  api.add = export(module, "scePadVirtualDeviceAddDevice");
-  api.insert = export(module, "scePadVirtualDeviceInsertData");
-  api.remove = export(module, "scePadVirtualDeviceDeleteDevice");
-  if (!api.init || !api.privilege || !api.add || !api.insert || !api.remove) {
-    LOG("pad: virtual controller exports missing");
+  LOG("pad: loading libScePad");
+  api.lib = dlopen("libScePad.sprx", RTLD_NOW | RTLD_GLOBAL);
+  if (!api.lib) api.lib = dlopen("/system/common/lib/libScePad.sprx", RTLD_NOW | RTLD_GLOBAL);
+  if (!api.lib) {
+    LOG("pad: cannot load libScePad: %s", dlerror());
     return -1;
   }
+  api.init = export("scePadInit");
+  api.privilege = export("scePadSetProcessPrivilege");
+  api.add = export("scePadVirtualDeviceAddDevice");
+  api.insert = export("scePadVirtualDeviceInsertData");
+  api.remove = export("scePadVirtualDeviceDeleteDevice");
+  if (!api.init || !api.privilege || !api.add || !api.insert || !api.remove) return -1;
+  LOG("pad: scePadInit");
   int rc = api.init();
-  if (rc) {
-    LOG("pad: scePadInit -> 0x%x", rc);
-    return -1;
-  }
+  LOG("pad: scePadInit -> 0x%x", rc);
+  if (rc) return -1;
   rc = api.privilege(1);
   LOG("pad: SetProcessPrivilege(1) -> 0x%x", rc);
   if (rc) return -1;
@@ -151,7 +162,7 @@ static void backend_destroy(void) {
 
 /* Called with g_lock held. */
 static void apply_state_locked(void) {
-  if (!g_pending || !g_healthy) {
+  if (!g_pending || g_mode != MODE_ON) {
     g_pending = 0;
     return;
   }
@@ -159,7 +170,7 @@ static void apply_state_locked(void) {
   g_pending = 0;
   if (backend_write(&s)) {
     LOG("pad: input write failed; virtual controller disabled until restart");
-    g_healthy = 0;
+    g_mode = MODE_OFF;
     g_owner = NULL;
     return;
   }
@@ -196,18 +207,26 @@ static void *pad_main(void *unused) {
   return NULL;
 }
 
-int pad_init(int enabled) {
-  if (!enabled) {
-    LOG("pad: disabled by configuration");
-    return -1;
-  }
-  if (backend_init()) {
+static void probe_mark(void) {
+  FILE *f = fopen(PROBE_PATH, "w");
+  if (!f) return;
+  fputs("libScePad initialisation in progress. If this file is left behind, the\n"
+        "service stopped during it; delete the file to try the controller again.\n", f);
+  fclose(f);
+}
+
+/* Loads and initialises the console's pad library, then starts the input
+ * thread. Called once, from the first PAD command, without g_lock held. */
+static int start_backend(void) {
+  probe_mark();
+  int rc = backend_init();
+  unlink(PROBE_PATH);
+  if (rc) {
     LOG("pad: virtual controller unavailable on this console");
     backend_destroy(); /* undo any partial setup (privilege, device) */
     return -1;
   }
   pthread_mutex_lock(&g_lock);
-  g_healthy = 1;
   g_running = 1;
   g_state = g_neutral;
   g_pending = 1;
@@ -215,7 +234,6 @@ int pad_init(int enabled) {
   if (platform_thread(&g_thread, pad_main, NULL, 0)) {
     LOG("pad: cannot start the input thread");
     pthread_mutex_lock(&g_lock);
-    g_healthy = 0;
     g_running = 0;
     pthread_mutex_unlock(&g_lock);
     backend_destroy();
@@ -226,7 +244,41 @@ int pad_init(int enabled) {
   return 0;
 }
 
+/* Brings a LAZY pad up (or down, on failure). Concurrent callers wait. */
+static void ensure_started(void) {
+  pthread_mutex_lock(&g_init_lock);
+  pthread_mutex_lock(&g_lock);
+  int lazy = g_mode == MODE_LAZY;
+  pthread_mutex_unlock(&g_lock);
+  if (lazy) {
+    int ok = !start_backend();
+    pthread_mutex_lock(&g_lock);
+    g_mode = ok ? MODE_ON : MODE_OFF;
+    pthread_mutex_unlock(&g_lock);
+  }
+  pthread_mutex_unlock(&g_init_lock);
+}
+
+int pad_init(int enabled) {
+  if (!enabled) {
+    LOG("pad: disabled by configuration");
+    return -1;
+  }
+  if (access(PROBE_PATH, F_OK) == 0) {
+    LOG("pad: the service stopped while starting the virtual controller last "
+        "time; controller off (delete " PROBE_PATH " to try again)");
+    return -1;
+  }
+  pthread_mutex_lock(&g_lock);
+  g_mode = MODE_LAZY;
+  pthread_mutex_unlock(&g_lock);
+  LOG("pad: virtual controller starts when a viewer first uses it");
+  return 0;
+}
+
 void pad_shutdown(void) {
+  /* An initialisation that never returns must not keep the process alive. */
+  int init_free = !pthread_mutex_trylock(&g_init_lock);
   pthread_mutex_lock(&g_lock);
   g_running = 0;
   pthread_mutex_unlock(&g_lock);
@@ -235,21 +287,26 @@ void pad_shutdown(void) {
     g_started = 0;
   }
   pthread_mutex_lock(&g_lock);
-  if (g_healthy) {
+  if (g_mode == MODE_ON) {
     g_state = g_neutral;
     g_pending = 1;
     apply_state_locked();
     backend_destroy();
   }
-  g_healthy = 0;
+  g_mode = MODE_OFF;
   g_owner = NULL;
   pthread_mutex_unlock(&g_lock);
+  if (init_free) pthread_mutex_unlock(&g_init_lock);
 }
 
 int pad_submit(const void *owner, uint32_t seq, const pad_state *state) {
   int result;
   pthread_mutex_lock(&g_lock);
-  if (!g_healthy) {
+  int lazy = g_mode == MODE_LAZY;
+  pthread_mutex_unlock(&g_lock);
+  if (lazy) ensure_started();
+  pthread_mutex_lock(&g_lock);
+  if (g_mode != MODE_ON) {
     result = PAD_UNAVAILABLE;
   } else {
     if (!g_owner) {
@@ -277,10 +334,11 @@ int pad_submit(const void *owner, uint32_t seq, const pad_state *state) {
   return result;
 }
 
+/* A LAZY pad is offered as free: it is started by the first PAD command. */
 int pad_state_for(const void *owner) {
   int result;
   pthread_mutex_lock(&g_lock);
-  if (!g_healthy) result = PAD_UNAVAILABLE;
+  if (g_mode == MODE_OFF) result = PAD_UNAVAILABLE;
   else if (!g_owner) result = PAD_FREE;
   else if (g_owner == owner) result = PAD_YOURS;
   else result = PAD_BUSY;
@@ -304,7 +362,8 @@ void pad_release(const void *owner) {
 void pad_get_info(pad_info *out) {
   if (!out) return;
   pthread_mutex_lock(&g_lock);
-  out->available = g_healthy;
+  out->available = g_mode != MODE_OFF;
+  out->started = g_mode == MODE_ON;
   out->owned = g_owner != NULL;
   out->writes = g_writes;
   out->buttons = g_last_buttons;

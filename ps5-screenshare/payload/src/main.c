@@ -278,19 +278,23 @@ int main(int argc, char **argv) {
     if (argv[i] && config_apply(&g_cfg, argv[i])) LOG("main: ignoring argument '%s'", argv[i]);
   settings_init(&g_cfg.settings);
 
-  uint8_t secret[PAIR_SECRET_LEN];
-  char pair_text[PAIR_TEXT_LEN], pair_id_text[PAIR_ID_LEN + 1];
-  int pair_created = 0;
-  if (pairing_load(PS5SS_DATA_DIR "/pairing.txt", secret, &pair_created)) {
-    LOG("pairing: cannot read or create " PS5SS_DATA_DIR "/pairing.txt");
+  /* The pairing code only matters with a relay; on the home network nothing
+   * of it runs. */
+  uint8_t secret[PAIR_SECRET_LEN] = {0};
+  if (g_cfg.relay_set) {
+    char pair_text[PAIR_TEXT_LEN], pair_id_text[PAIR_ID_LEN + 1];
+    int pair_created = 0;
+    if (pairing_load(PS5SS_DATA_DIR "/pairing.txt", secret, &pair_created)) {
+      LOG("pairing: cannot read or create " PS5SS_DATA_DIR "/pairing.txt");
+    }
+    if (pair_created) LOG("pairing: new pairing code created");
+    pair_format(secret, pair_text);
+    pair_id(secret, pair_id_text);
+    server_set_pairing(pair_text);
+    status_set_relay(g_cfg.relay_host, g_cfg.relay_port, pair_id_text);
   }
-  if (pair_created) LOG("pairing: new pairing code created");
-  pair_format(secret, pair_text);
-  pair_id(secret, pair_id_text);
-  server_set_pairing(pair_text);
-  status_set_relay(g_cfg.relay_set ? g_cfg.relay_host : "", g_cfg.relay_port, pair_id_text);
 
-  pad_init(g_cfg.pad); /* viewers' touch controls; failure only disables them */
+  pad_init(g_cfg.pad); /* touches nothing on the console until a viewer sends input */
   platform_notify_enable(g_cfg.notify);
 
   unsigned generation = 0;

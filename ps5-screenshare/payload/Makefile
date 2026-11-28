@@ -7,7 +7,7 @@
 #   make host               -> build/host/ps5ss-service (Linux, mock capture)
 #   make deploy PS5_HOST=192.168.0.10
 
-VERSION   ?= 1.0.0
+VERSION   ?= 1.1.0
 PS5_HOST  ?= ps5
 PS5_PORT  ?= 9021
 SRCDIR    := src

@@ -124,8 +124,9 @@ static void http_index(int fd, int head) {
   char ip[64] = "?";
   platform_local_ip(ip, sizeof(ip));
   char page[6144];
-  char pairing[512];
-  snprintf(pairing, sizeof(pairing),
+  char pairing[512] = "";
+  if (g_pairing[0]) /* only with relay= set */
+    snprintf(pairing, sizeof(pairing),
       "<h2>Acesso de fora de casa</h2>"
       "<p>Código de pareamento: <code>%s</code><br>"
       "Servidor: <code>%s</code> &middot; PS5 %s</p>"

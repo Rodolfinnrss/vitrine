@@ -315,6 +315,18 @@ def wait_pad(client, limit=3000):
     return None
 
 
+def video_flows(client, limit=3000):
+    """True once a video packet arrives (the stream is still running)."""
+    for _ in range(limit):
+        t, _, _, _ = client.packet()
+        if t == ps.PKT_VIDEO:
+            return True
+    return False
+
+
+PAD_PROBE = os.path.join(os.path.dirname(BIN), "data", "pad-probe.txt")
+
+
 def pad_status():
     return json.loads(http("/status")[2])["pad"]
 
@@ -401,14 +413,31 @@ def test_pad_control():
     s = Service(env={"PS5SS_MOCK_PAD": "0"})
     try:
         c = ps.Client("127.0.0.1", PORT, "HELLO 1 audio=0")
-        check(wait_pad(c) == 0, "no virtual controller: viewers are told it is unavailable")
+        check(wait_pad(c) == 1, "the console pad library is not touched before the first input")
+        check(not pad_status()["started"], "pad not started at connect")
         c.send_line("PAD 1,16384,128,128,128,128,0,0")
+        check(wait_pad(c) == 0, "no virtual controller: the first input is answered 'unavailable'")
         time.sleep(0.2)
         st = pad_status()
         check(not st["available"] and st["writes"] == 0, "unavailable pad takes no input")
+        check(video_flows(c), "the stream keeps going without a controller")
         c.close()
     finally:
         s.stop()
+    check(not os.path.exists(PAD_PROBE), "no probe file is left after a failed start")
+
+    # The service died while starting the pad last time: keep it off, keep streaming.
+    with open(PAD_PROBE, "w") as f:
+        f.write("left over\n")
+    s = Service()
+    try:
+        c = ps.Client("127.0.0.1", PORT, "HELLO 1 audio=0")
+        check(wait_pad(c) == 0, "a left-over probe file keeps the controller off")
+        check(video_flows(c), "the stream still works with the controller off")
+        c.close()
+    finally:
+        s.stop()
+        os.remove(PAD_PROBE)
 
     s = Service(args=("pad=0",))
     try:

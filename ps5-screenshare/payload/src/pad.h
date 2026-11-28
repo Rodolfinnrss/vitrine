@@ -61,7 +61,8 @@ void pad_release(const void *owner);
 int pad_parse(const char *text, uint32_t *seq, pad_state *state);
 
 typedef struct {
-  int available;
+  int available; /* can be used (it may not be started yet) */
+  int started;   /* libScePad initialised and the virtual device created */
   int owned;
   uint64_t writes;
   uint32_t buttons;

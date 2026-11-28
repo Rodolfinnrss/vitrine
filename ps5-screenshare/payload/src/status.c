@@ -110,7 +110,7 @@ size_t status_json(char *out, size_t cap, int port) {
       "\"active\":{\"width\":%d,\"height\":%d,\"fps\":%d,\"kbps\":%d,\"audio\":%d},"
       "\"requested\":{\"resolution\":\"%s\",\"fps\":%d,\"kbps\":%d,\"audio\":%d},"
       "\"frames\":%llu,\"bytes\":%llu,\"keyframes\":%llu,\"audio_blocks\":%llu,"
-      "\"pad\":{\"available\":%d,\"owned\":%d,\"writes\":%llu,\"buttons\":\"0x%x\"},"
+      "\"pad\":{\"available\":%d,\"started\":%d,\"owned\":%d,\"writes\":%llu,\"buttons\":\"0x%x\"},"
       "\"relay\":{\"configured\":%d,\"host\":\"%s\",\"port\":%d,\"connected\":%d,\"pairing_id\":\"%s\"},"
       "\"clients\":%s}",
       PS5SS_VERSION, port, (st.fw >> 24) & 0xff, (st.fw >> 16) & 0xff, st.fw,
@@ -118,7 +118,7 @@ size_t status_json(char *out, size_t cap, int port) {
       st.height, st.fps, st.kbps, st.audio, settings_resolution_name(cs.height),
       cs.fps, cs.kbps, cs.audio, (unsigned long long)st.frames,
       (unsigned long long)st.bytes, (unsigned long long)st.keyframes,
-      (unsigned long long)st.audio_blocks, pad.available, pad.owned,
+      (unsigned long long)st.audio_blocks, pad.available, pad.started, pad.owned,
       (unsigned long long)pad.writes, pad.buttons,
       st.relay_host[0] != 0, relay_host, st.relay_port, relay_connected(), st.pairing_id, clients);
   if (n < 0) return 0;
